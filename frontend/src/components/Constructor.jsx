@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { generateTestHTML } from "../testTemplate";
-import { PlusCircle, Trash2, Save, Download } from "lucide-react";
+import { PlusCircle, Trash2, Download } from "lucide-react";
+
+const letterFor = (i) => String.fromCharCode(65 + i);
 
 export default function Constructor() {
   const [settings, setSettings] = useState({
@@ -66,7 +68,6 @@ export default function Constructor() {
   const handleGenerate = () => {
     if (questions.length === 0) return alert("Добавьте хотя бы один вопрос");
 
-    // Проверка заполненности
     for (let i = 0; i < questions.length; i++) {
       if (!questions[i].text)
         return alert(`Вопрос ${i + 1} не содержит текста`);
@@ -86,28 +87,40 @@ export default function Constructor() {
     URL.revokeObjectURL(url);
   };
 
+  const totalPossible =
+    questions.length * (Number(settings.pointsPerQuestion) || 0);
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">
-          Настройки теста
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+      {/* Заголовок-бланк */}
+      <div className="paper-card p-6 md:p-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--graphite)]">
+            Бланк теста
+          </h2>
+          <span className="font-mono text-xs text-[var(--graphite)]">
+            {questions.length} {questions.length === 1 ? "вопрос" : "вопросов"}{" "}
+            · до {totalPossible} баллов
+          </span>
+        </div>
+
+        <div>
+          <label className="block font-mono text-[11px] uppercase tracking-wider text-[var(--graphite)] mb-2">
+            Название теста
+          </label>
+          <input
+            type="text"
+            value={settings.title}
+            onChange={(e) =>
+              setSettings({ ...settings, title: e.target.value })
+            }
+            className="field-underline w-full text-2xl font-semibold text-[var(--ink)]"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-6 mt-6 max-w-sm">
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              Название теста
-            </label>
-            <input
-              type="text"
-              value={settings.title}
-              onChange={(e) =>
-                setSettings({ ...settings, title: e.target.value })
-              }
-              className="w-full border p-2 rounded-lg"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">
+            <label className="block font-mono text-[11px] uppercase tracking-wider text-[var(--graphite)] mb-2">
               Баллов за вопрос
             </label>
             <input
@@ -119,11 +132,11 @@ export default function Constructor() {
                   pointsPerQuestion: Number(e.target.value),
                 })
               }
-              className="w-full border p-2 rounded-lg"
+              className="field-underline w-full text-lg"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
+            <label className="block font-mono text-[11px] uppercase tracking-wider text-[var(--graphite)] mb-2">
               Проходной балл
             </label>
             <input
@@ -132,107 +145,112 @@ export default function Constructor() {
               onChange={(e) =>
                 setSettings({ ...settings, passScore: Number(e.target.value) })
               }
-              className="w-full border p-2 rounded-lg"
+              className="field-underline w-full text-lg"
             />
           </div>
         </div>
       </div>
 
-      <div className="space-y-6">
+      {/* Вопросы */}
+      <div className="space-y-4">
         {questions.map((q, qIndex) => (
-          <div
-            key={qIndex}
-            className="bg-white p-6 rounded-xl shadow-lg border-t-4 border-blue-500 relative transition-all"
-          >
-            <button
-              onClick={() => removeQuestion(qIndex)}
-              className="absolute top-4 right-4 text-red-400 hover:text-red-600"
-            >
-              <Trash2 size={20} />
-            </button>
-            <div className="flex gap-4 mb-4">
-              <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Вопрос {qIndex + 1}
-                </label>
-                <input
-                  type="text"
-                  value={q.text}
-                  onChange={(e) =>
-                    updateQuestion(qIndex, "text", e.target.value)
-                  }
-                  placeholder="Текст вопроса..."
-                  className="w-full border p-2 rounded-lg bg-gray-50 focus:bg-white"
-                />
-              </div>
-              <div className="w-48">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Тип ответа
-                </label>
-                <select
-                  value={q.type}
-                  onChange={(e) => {
-                    updateQuestion(qIndex, "type", e.target.value);
-                    updateQuestion(qIndex, "correctAnswers", []);
-                  }}
-                  className="w-full border p-2 rounded-lg bg-gray-50"
-                >
-                  <option value="radio">Один правильный</option>
-                  <option value="checkbox">Несколько правильных</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-3 pl-4 border-l-2 border-gray-200">
-              {q.options.map((opt, oIndex) => (
-                <div key={oIndex} className="flex items-center gap-3">
-                  <input
-                    type={q.type}
-                    name={`q_${qIndex}_correct`}
-                    checked={q.correctAnswers.includes(oIndex)}
-                    onChange={() => toggleCorrectAnswer(qIndex, oIndex)}
-                    className="w-5 h-5 text-blue-600 cursor-pointer"
-                  />
+          <div key={qIndex} className="paper-card flex overflow-hidden">
+            <div className="timing-track" />
+            <div className="flex-1 p-6">
+              <div className="flex items-start gap-4 mb-5">
+                <div className="q-badge">{qIndex + 1}</div>
+                <div className="flex-1 flex flex-col md:flex-row gap-4">
                   <input
                     type="text"
-                    value={opt}
+                    value={q.text}
                     onChange={(e) =>
-                      updateOption(qIndex, oIndex, e.target.value)
+                      updateQuestion(qIndex, "text", e.target.value)
                     }
-                    placeholder={`Вариант ${oIndex + 1}`}
-                    className="flex-1 border-b border-gray-300 p-1 focus:border-blue-500 focus:outline-none"
+                    placeholder="Текст вопроса..."
+                    className="field-underline flex-1 text-base font-medium"
                   />
-                  <button
-                    onClick={() => removeOption(qIndex, oIndex)}
-                    className="text-gray-400 hover:text-red-500"
+                  <select
+                    value={q.type}
+                    onChange={(e) => {
+                      updateQuestion(qIndex, "type", e.target.value);
+                      updateQuestion(qIndex, "correctAnswers", []);
+                    }}
+                    className="border border-[var(--line-strong)] rounded-lg px-3 py-2 bg-[var(--paper)] font-mono text-sm text-[var(--ink-soft)] md:w-56"
                   >
-                    <Trash2 size={16} />
-                  </button>
+                    <option value="radio">Один правильный</option>
+                    <option value="checkbox">Несколько правильных</option>
+                  </select>
                 </div>
-              ))}
-              <button
-                onClick={() => addOption(qIndex)}
-                className="text-blue-500 text-sm font-medium hover:underline flex items-center gap-1 mt-2"
-              >
-                <PlusCircle size={16} /> Добавить вариант
-              </button>
+                <button
+                  onClick={() => removeQuestion(qIndex)}
+                  className="text-[var(--graphite)] hover:text-[var(--incorrect)] transition-colors"
+                  title="Удалить вопрос"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-2.5 pl-1">
+                {q.options.map((opt, oIndex) => {
+                  const marked = q.correctAnswers.includes(oIndex);
+                  return (
+                    <div key={oIndex} className="flex items-center gap-3 group">
+                      <button
+                        type="button"
+                        onClick={() => toggleCorrectAnswer(qIndex, oIndex)}
+                        className={`bubble ${q.type === "checkbox" ? "checkbox-shape" : ""} ${marked ? "is-marked" : ""}`}
+                        title="Отметить как правильный"
+                      >
+                        {letterFor(oIndex)}
+                      </button>
+                      <input
+                        type="text"
+                        value={opt}
+                        onChange={(e) =>
+                          updateOption(qIndex, oIndex, e.target.value)
+                        }
+                        placeholder={`Вариант ${letterFor(oIndex)}`}
+                        className="field-underline flex-1"
+                      />
+                      <button
+                        onClick={() => removeOption(qIndex, oIndex)}
+                        className="text-[var(--line-strong)] hover:text-[var(--incorrect)] opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  );
+                })}
+                <button
+                  onClick={() => addOption(qIndex)}
+                  className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-[var(--navy)] hover:underline mt-3 ml-[42px]"
+                >
+                  <PlusCircle size={14} /> Добавить вариант
+                </button>
+              </div>
             </div>
           </div>
         ))}
+
+        {questions.length === 0 && (
+          <div className="paper-card border-dashed p-10 text-center text-[var(--graphite)] font-mono text-sm">
+            Пока нет ни одного вопроса — начните с кнопки ниже
+          </div>
+        )}
       </div>
 
-      <div className="flex gap-4 pb-12">
+      <div className="flex flex-col sm:flex-row gap-3 pb-12">
         <button
           onClick={addQuestion}
-          className="flex-1 bg-gray-800 text-white py-3 rounded-xl font-semibold hover:bg-gray-700 transition flex justify-center items-center gap-2 shadow-lg"
+          className="flex-1 border-2 border-dashed border-[var(--line-strong)] text-[var(--ink-soft)] py-3.5 rounded-xl font-mono text-sm uppercase tracking-wider hover:border-[var(--navy)] hover:text-[var(--navy)] transition flex justify-center items-center gap-2"
         >
-          <PlusCircle size={20} /> Добавить вопрос
+          <PlusCircle size={18} /> Добавить вопрос
         </button>
         <button
           onClick={handleGenerate}
-          className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition flex justify-center items-center gap-2 shadow-lg"
+          className="flex-1 bg-[var(--navy)] text-white py-3.5 rounded-xl font-mono text-sm uppercase tracking-wider hover:bg-[var(--navy-ink)] transition flex justify-center items-center gap-2 shadow-sm"
         >
-          <Download size={20} /> Сгенерировать test.html
+          <Download size={18} /> Сгенерировать test.html
         </button>
       </div>
     </div>
