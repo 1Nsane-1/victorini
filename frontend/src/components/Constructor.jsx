@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { generateTestHTML } from "../testTemplate";
-import { PlusCircle, Trash2, Download } from "lucide-react";
+import { Plus, Trash2, Download } from "lucide-react";
 
 const letterFor = (i) => String.fromCharCode(65 + i);
 
@@ -91,38 +91,30 @@ export default function Constructor() {
     questions.length * (Number(settings.pointsPerQuestion) || 0);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
-      {/* Заголовок-бланк */}
-      <div className="paper-card p-6 md:p-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--graphite)]">
-            Бланк теста
-          </h2>
-          <span className="font-mono text-xs text-[var(--graphite)]">
-            {questions.length} {questions.length === 1 ? "вопрос" : "вопросов"}{" "}
-            · до {totalPossible} баллов
+    <div>
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">Бланк теста</h2>
+          <span className="text-muted">
+            {questions.length} вопросов · до {totalPossible} баллов
           </span>
         </div>
 
-        <div>
-          <label className="block font-mono text-[11px] uppercase tracking-wider text-[var(--graphite)] mb-2">
-            Название теста
-          </label>
+        <div className="form-group">
+          <label className="form-label">Название теста</label>
           <input
             type="text"
             value={settings.title}
             onChange={(e) =>
               setSettings({ ...settings, title: e.target.value })
             }
-            className="field-underline w-full text-2xl font-semibold text-[var(--ink)]"
+            className="input-field title-input"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-6 mt-6 max-w-sm">
-          <div>
-            <label className="block font-mono text-[11px] uppercase tracking-wider text-[var(--graphite)] mb-2">
-              Баллов за вопрос
-            </label>
+        <div className="grid-2">
+          <div className="form-group mb-0">
+            <label className="form-label">Баллов за вопрос</label>
             <input
               type="number"
               value={settings.pointsPerQuestion}
@@ -132,74 +124,67 @@ export default function Constructor() {
                   pointsPerQuestion: Number(e.target.value),
                 })
               }
-              className="field-underline w-full text-lg"
+              className="input-field"
             />
           </div>
-          <div>
-            <label className="block font-mono text-[11px] uppercase tracking-wider text-[var(--graphite)] mb-2">
-              Проходной балл
-            </label>
+          <div className="form-group mb-0">
+            <label className="form-label">Проходной балл</label>
             <input
               type="number"
               value={settings.passScore}
               onChange={(e) =>
                 setSettings({ ...settings, passScore: Number(e.target.value) })
               }
-              className="field-underline w-full text-lg"
+              className="input-field"
             />
           </div>
         </div>
       </div>
 
-      {/* Вопросы */}
-      <div className="space-y-4">
-        {questions.map((q, qIndex) => (
-          <div key={qIndex} className="paper-card flex overflow-hidden">
-            <div className="timing-track" />
-            <div className="flex-1 p-6">
-              <div className="flex items-start gap-4 mb-5">
-                <div className="q-badge">{qIndex + 1}</div>
-                <div className="flex-1 flex flex-col md:flex-row gap-4">
-                  <input
-                    type="text"
-                    value={q.text}
-                    onChange={(e) =>
-                      updateQuestion(qIndex, "text", e.target.value)
-                    }
-                    placeholder="Текст вопроса..."
-                    className="field-underline flex-1 text-base font-medium"
-                  />
-                  <select
-                    value={q.type}
-                    onChange={(e) => {
-                      updateQuestion(qIndex, "type", e.target.value);
-                      updateQuestion(qIndex, "correctAnswers", []);
-                    }}
-                    className="border border-[var(--line-strong)] rounded-lg px-3 py-2 bg-[var(--paper)] font-mono text-sm text-[var(--ink-soft)] md:w-56"
-                  >
-                    <option value="radio">Один правильный</option>
-                    <option value="checkbox">Несколько правильных</option>
-                  </select>
-                </div>
+      {questions.map((q, qIndex) => (
+        <div key={qIndex} className="card">
+          <div className="question-row">
+            <div className="q-number">{qIndex + 1}</div>
+            <div className="q-content">
+              <div className="q-header">
+                <input
+                  type="text"
+                  value={q.text}
+                  onChange={(e) =>
+                    updateQuestion(qIndex, "text", e.target.value)
+                  }
+                  placeholder="Текст вопроса..."
+                  className="input-field"
+                />
+                <select
+                  value={q.type}
+                  onChange={(e) => {
+                    updateQuestion(qIndex, "type", e.target.value);
+                    updateQuestion(qIndex, "correctAnswers", []);
+                  }}
+                  className="input-field"
+                  style={{ width: "220px" }}
+                >
+                  <option value="radio">Один правильный</option>
+                  <option value="checkbox">Несколько правильных</option>
+                </select>
                 <button
                   onClick={() => removeQuestion(qIndex)}
-                  className="text-[var(--graphite)] hover:text-[var(--incorrect)] transition-colors"
-                  title="Удалить вопрос"
+                  className="btn-icon"
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={20} />
                 </button>
               </div>
 
-              <div className="space-y-2.5 pl-1">
+              <div>
                 {q.options.map((opt, oIndex) => {
                   const marked = q.correctAnswers.includes(oIndex);
                   return (
-                    <div key={oIndex} className="flex items-center gap-3 group">
+                    <div key={oIndex} className="option-row">
                       <button
                         type="button"
                         onClick={() => toggleCorrectAnswer(qIndex, oIndex)}
-                        className={`bubble ${q.type === "checkbox" ? "checkbox-shape" : ""} ${marked ? "is-marked" : ""}`}
-                        title="Отметить как правильный"
+                        className={`bubble ${q.type === "checkbox" ? "checkbox" : ""} ${marked ? "active" : ""}`}
                       >
                         {letterFor(oIndex)}
                       </button>
@@ -210,46 +195,47 @@ export default function Constructor() {
                           updateOption(qIndex, oIndex, e.target.value)
                         }
                         placeholder={`Вариант ${letterFor(oIndex)}`}
-                        className="field-underline flex-1"
+                        className="input-field"
                       />
                       <button
                         onClick={() => removeOption(qIndex, oIndex)}
-                        className="text-[var(--line-strong)] hover:text-[var(--incorrect)] opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="btn-icon"
                       >
-                        <Trash2 size={15} />
+                        <Trash2 size={18} />
                       </button>
                     </div>
                   );
                 })}
                 <button
                   onClick={() => addOption(qIndex)}
-                  className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-[var(--navy)] hover:underline mt-3 ml-[42px]"
+                  className="add-option-btn"
                 >
-                  <PlusCircle size={14} /> Добавить вариант
+                  <Plus size={16} /> Добавить вариант
                 </button>
               </div>
             </div>
           </div>
-        ))}
+        </div>
+      ))}
 
-        {questions.length === 0 && (
-          <div className="paper-card border-dashed p-10 text-center text-[var(--graphite)] font-mono text-sm">
-            Пока нет ни одного вопроса — начните с кнопки ниже
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-3 pb-12">
-        <button
-          onClick={addQuestion}
-          className="flex-1 border-2 border-dashed border-[var(--line-strong)] text-[var(--ink-soft)] py-3.5 rounded-xl font-mono text-sm uppercase tracking-wider hover:border-[var(--navy)] hover:text-[var(--navy)] transition flex justify-center items-center gap-2"
+      {questions.length === 0 && (
+        <div
+          className="card"
+          style={{
+            padding: "60px 20px",
+            textAlign: "center",
+            color: "var(--text-muted)",
+          }}
         >
-          <PlusCircle size={18} /> Добавить вопрос
+          Пока нет ни одного вопроса — начните с кнопки ниже
+        </div>
+      )}
+
+      <div className="actions-row">
+        <button onClick={addQuestion} className="btn btn-outline">
+          <Plus size={18} /> Добавить вопрос
         </button>
-        <button
-          onClick={handleGenerate}
-          className="flex-1 bg-[var(--navy)] text-white py-3.5 rounded-xl font-mono text-sm uppercase tracking-wider hover:bg-[var(--navy-ink)] transition flex justify-center items-center gap-2 shadow-sm"
-        >
+        <button onClick={handleGenerate} className="btn btn-primary">
           <Download size={18} /> Сгенерировать test.html
         </button>
       </div>
