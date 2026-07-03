@@ -34,7 +34,7 @@ export default function Analyzer() {
   });
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all"); // all | passed | failed
+  const [statusFilter, setStatusFilter] = useState("all");
   const [sortKey, setSortKey] = useState("score");
   const [sortDir, setSortDir] = useState("desc");
   const [notice, setNotice] = useState("");
@@ -64,7 +64,7 @@ export default function Analyzer() {
             const next = [...prev, { ...json, _id: makeId() }];
             if (next.length > MAX_RESULTS) {
               setNotice(
-                `Достигнут лимит ${MAX_RESULTS} сохранённых результатов — старые записи удалены.`,
+                `Достигнут лимит ${MAX_RESULTS} результатов — старые записи удалены.`,
               );
               return next.slice(next.length - MAX_RESULTS);
             }
@@ -80,7 +80,7 @@ export default function Analyzer() {
   };
 
   const clearAll = () => {
-    if (!confirm("Очистить все загруженные результаты?")) return;
+    if (!window.confirm("Очистить все загруженные результаты?")) return;
     setResults([]);
     setSelectedId(null);
     try {
@@ -121,7 +121,6 @@ export default function Analyzer() {
     [results, totalStudents],
   );
 
-  // Распределение баллов по процентным диапазонам
   const distribution = useMemo(() => {
     const buckets = [
       { label: "0–20%", min: 0, max: 20, count: 0 },
@@ -141,7 +140,6 @@ export default function Analyzer() {
   }, [results]);
   const maxBucket = Math.max(1, ...distribution.map((b) => b.count));
 
-  // Сложность вопросов — агрегируем по всем сданным работам
   const questionStats = useMemo(() => {
     const map = new Map();
     results.forEach((r) => {
@@ -151,18 +149,11 @@ export default function Analyzer() {
             question: det.question,
             total: 0,
             correct: 0,
-            wrongCounts: {},
           });
         }
         const entry = map.get(det.question);
         entry.total += 1;
-        if (det.isCorrect) {
-          entry.correct += 1;
-        } else {
-          (det.userAnswers || []).forEach((idx) => {
-            entry.wrongCounts[idx] = (entry.wrongCounts[idx] || 0) + 1;
-          });
-        }
+        if (det.isCorrect) entry.correct += 1;
       });
     });
     return Array.from(map.values())
@@ -191,9 +182,8 @@ export default function Analyzer() {
   }, [results, search, statusFilter, sortKey, sortDir]);
 
   const toggleSort = (key) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
       setSortKey(key);
       setSortDir(key === "name" ? "asc" : "desc");
     }
@@ -215,187 +205,322 @@ export default function Analyzer() {
     if (
       selectedIndexInList >= 0 &&
       selectedIndexInList < filteredResults.length - 1
-    ) {
+    )
       setSelectedId(filteredResults[selectedIndexInList + 1]._id);
-    }
   };
 
   return (
-    <div className="max-w-6xl mx-auto animate-fade-in">
+    <div>
       {/* Зона загрузки */}
-      <div className="paper-card border-dashed p-8 md:p-10 text-center mb-6 relative hover:border-[var(--navy)] transition-colors">
+      <div
+        className="card"
+        style={{
+          border: "2px dashed var(--border)",
+          textAlign: "center",
+          position: "relative",
+          cursor: "pointer",
+          transition: "all 0.2s",
+        }}
+        onMouseOver={(e) =>
+          (e.currentTarget.style.borderColor = "var(--primary)")
+        }
+        onMouseOut={(e) =>
+          (e.currentTarget.style.borderColor = "var(--border)")
+        }
+      >
         <input
           type="file"
           multiple
           accept=".json"
           onChange={handleFileUpload}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: 0,
+            cursor: "pointer",
+          }}
         />
         <UploadCloud
-          className="mx-auto text-[var(--graphite)] mb-3"
           size={40}
+          style={{ color: "var(--text-muted)", margin: "0 auto 12px" }}
         />
-        <h3 className="font-mono text-sm uppercase tracking-wider text-[var(--ink)]">
+        <h3
+          style={{ fontSize: "16px", fontWeight: "600", marginBottom: "4px" }}
+        >
           Загрузите файлы результатов (.json)
         </h3>
-        <p className="text-[var(--ink-soft)] mt-1 text-sm">
+        <p className="text-muted">
           Перетащите файлы сюда или нажмите для выбора
         </p>
       </div>
 
-      {totalStudents > 0 && (
-        <div className="flex items-center justify-between mb-4 font-mono text-xs text-[var(--graphite)] uppercase tracking-wider">
-          <span>
-            Сохранено: {totalStudents}/{MAX_RESULTS}
-          </span>
-          <span>Результаты хранятся локально в этом браузере</span>
-        </div>
-      )}
-
       {notice && (
-        <div className="paper-card mb-4 px-4 py-3 text-sm text-[var(--amber)] border-[var(--amber)] bg-[var(--amber-soft)] animate-fade-in">
+        <div
+          style={{
+            background: "var(--danger-bg)",
+            color: "var(--danger)",
+            padding: "12px 16px",
+            borderRadius: "10px",
+            marginBottom: "24px",
+            fontWeight: "500",
+            fontSize: "14px",
+          }}
+        >
           {notice}
         </div>
       )}
 
-      {totalStudents > 1 && (
+      {totalStudents > 0 && (
         <>
           {/* Сводная статистика */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: "16px",
+              marginBottom: "24px",
+            }}
+          >
             <StatCard
-              icon={<Users size={22} />}
+              icon={<Users size={20} />}
               value={totalStudents}
               label="Сдавших"
             />
             <StatCard
-              icon={<CheckCircle size={22} />}
+              icon={<CheckCircle size={20} />}
               value={passedStudents}
               label="Успешно"
-              tone="correct"
+              color="var(--success)"
             />
             <StatCard
-              icon={<XCircle size={22} />}
+              icon={<XCircle size={20} />}
               value={totalStudents - passedStudents}
               label="Провалили"
-              tone="incorrect"
+              color="var(--danger)"
             />
             <StatCard
-              icon={
-                <span className="font-mono font-bold text-lg">{passRate}%</span>
-              }
-              value={null}
+              value={`${passRate}%`}
               label="Процент сдачи"
-              tone="navy"
+              color="var(--primary)"
             />
-            <StatCard value={avgScore.toFixed(1)} label="Средний балл" />
+            <StatCard value={avgScore.toFixed(1)} label="Ср. балл" />
             <StatCard value={median} label="Медиана" />
             <StatCard
-              icon={<Crown size={20} className="text-[var(--amber)]" />}
+              icon={<Crown size={18} />}
               value={best?.score}
               label={`Лучший: ${best?.fio?.split(" ")[0] || "—"}`}
-            />
-            <StatCard
-              icon={
-                <TrendingDown size={20} className="text-[var(--incorrect)]" />
-              }
-              value={worst?.score}
-              label={`Худший: ${worst?.fio?.split(" ")[0] || "—"}`}
+              color="#d97706"
             />
           </div>
 
-          {/* Распределение баллов + сложность вопросов */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="paper-card p-6">
-              <h3 className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--graphite)] mb-5">
-                Распределение результатов
-              </h3>
-              <div className="space-y-3">
-                {distribution.map((b) => (
-                  <div key={b.label} className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-[var(--ink-soft)] w-16 shrink-0">
-                      {b.label}
-                    </span>
-                    <div className="bar-track flex-1">
-                      <div
-                        className="bar-fill animate-grow-bar"
-                        style={{
-                          width: `${(b.count / maxBucket) * 100}%`,
-                          background: "var(--navy)",
-                        }}
-                      />
-                    </div>
-                    <span className="font-mono text-xs text-[var(--ink)] w-6 text-right shrink-0">
-                      {b.count}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="paper-card p-6">
-              <h3 className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--graphite)] mb-5">
-                Сложность вопросов
-              </h3>
-              <div className="space-y-4 max-h-[220px] overflow-y-auto pr-2">
-                {questionStats.map((q, idx) => (
-                  <div key={idx}>
-                    <div className="flex items-start justify-between gap-3 mb-1.5">
-                      <p className="text-sm text-[var(--ink)] leading-snug flex-1">
-                        {q.question}
-                      </p>
+          {/* Графики */}
+          {totalStudents > 1 && (
+            <div className="grid-2" style={{ marginBottom: "24px" }}>
+              <div className="card" style={{ marginBottom: 0 }}>
+                <h3
+                  className="text-muted"
+                  style={{
+                    fontSize: "12px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    marginBottom: "16px",
+                    fontWeight: "600",
+                  }}
+                >
+                  Распределение результатов
+                </h3>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                  }}
+                >
+                  {distribution.map((b) => (
+                    <div
+                      key={b.label}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                      }}
+                    >
                       <span
-                        className={`font-mono text-xs font-semibold shrink-0 ${
-                          q.rate < 50
-                            ? "text-[var(--incorrect)]"
-                            : "text-[var(--correct)]"
-                        }`}
+                        className="text-muted"
+                        style={{
+                          fontSize: "13px",
+                          width: "60px",
+                          flexShrink: 0,
+                        }}
                       >
-                        {q.rate}%
+                        {b.label}
+                      </span>
+                      <div
+                        style={{
+                          flex: 1,
+                          height: "8px",
+                          background: "var(--border)",
+                          borderRadius: "10px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${(b.count / maxBucket) * 100}%`,
+                            background: "var(--primary)",
+                            height: "100%",
+                            borderRadius: "10px",
+                            transition: "width 0.5s",
+                          }}
+                        />
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: "600",
+                          width: "20px",
+                          textAlign: "right",
+                        }}
+                      >
+                        {b.count}
                       </span>
                     </div>
-                    <div className="bar-track">
+                  ))}
+                </div>
+              </div>
+
+              <div className="card" style={{ marginBottom: 0 }}>
+                <h3
+                  className="text-muted"
+                  style={{
+                    fontSize: "12px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    marginBottom: "16px",
+                    fontWeight: "600",
+                  }}
+                >
+                  Сложность вопросов (верные ответы)
+                </h3>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "16px",
+                    maxHeight: "200px",
+                    overflowY: "auto",
+                    paddingRight: "8px",
+                  }}
+                >
+                  {questionStats.map((q, idx) => (
+                    <div key={idx}>
                       <div
-                        className="bar-fill animate-grow-bar"
                         style={{
-                          width: `${q.rate}%`,
-                          background:
-                            q.rate < 50 ? "var(--incorrect)" : "var(--correct)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: "13px",
+                          marginBottom: "6px",
+                          gap: "12px",
                         }}
-                      />
+                      >
+                        <span
+                          style={{
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {q.question}
+                        </span>
+                        <span
+                          style={{
+                            fontWeight: "600",
+                            color:
+                              q.rate < 50 ? "var(--danger)" : "var(--success)",
+                          }}
+                        >
+                          {q.rate}%
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          height: "6px",
+                          background: "var(--border)",
+                          borderRadius: "10px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${q.rate}%`,
+                            background:
+                              q.rate < 50 ? "var(--danger)" : "var(--success)",
+                            height: "100%",
+                            borderRadius: "10px",
+                          }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {questionStats.length === 0 && (
-                  <p className="text-sm text-[var(--graphite)] font-mono">
-                    Нет данных
-                  </p>
-                )}
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
+          )}
 
-      {totalStudents >= 1 && (
-        <>
-          {/* Таблица результатов + детали */}
-          <div className="flex flex-col md:flex-row gap-6">
-            <div className="flex-1 paper-card overflow-hidden">
-              <div className="p-4 border-b border-[var(--line)] flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                <div className="relative flex-1 max-w-xs">
+          {/* Нижняя часть: Таблица и Детали */}
+          <div
+            style={{
+              display: "flex",
+              gap: "24px",
+              alignItems: "flex-start",
+              flexWrap: "wrap",
+            }}
+          >
+            {/* Таблица */}
+            <div
+              className="card"
+              style={{ flex: "1 1 400px", padding: 0, overflow: "hidden" }}
+            >
+              <div
+                style={{
+                  padding: "20px",
+                  borderBottom: "1px solid var(--border)",
+                  display: "flex",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div
+                  style={{ position: "relative", flex: "1", minWidth: "200px" }}
+                >
                   <Search
-                    size={15}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--graphite)]"
+                    size={16}
+                    style={{
+                      position: "absolute",
+                      left: "12px",
+                      top: "12px",
+                      color: "var(--text-muted)",
+                    }}
                   />
                   <input
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Поиск по ФИО..."
-                    className="w-full pl-9 pr-3 py-2 border border-[var(--line-strong)] rounded-lg bg-[var(--paper)] text-sm font-mono focus:outline-none focus:border-[var(--navy)]"
+                    className="input-field"
+                    style={{
+                      paddingLeft: "36px",
+                      paddingRight: "12px",
+                      paddingTop: "10px",
+                      paddingBottom: "10px",
+                    }}
                   />
                 </div>
-                <div className="flex items-center gap-2">
+                <div
+                  style={{ display: "flex", gap: "8px", alignItems: "center" }}
+                >
                   <FilterPill
                     active={statusFilter === "all"}
                     onClick={() => setStatusFilter("all")}
@@ -405,221 +530,427 @@ export default function Analyzer() {
                   <FilterPill
                     active={statusFilter === "passed"}
                     onClick={() => setStatusFilter("passed")}
-                    tone="correct"
+                    color="var(--success)"
                   >
                     Сдали
                   </FilterPill>
                   <FilterPill
                     active={statusFilter === "failed"}
                     onClick={() => setStatusFilter("failed")}
-                    tone="incorrect"
+                    color="var(--danger)"
                   >
                     Не сдали
                   </FilterPill>
                   <button
                     onClick={clearAll}
-                    title="Очистить все результаты"
-                    className="ml-1 p-2 text-[var(--graphite)] hover:text-[var(--incorrect)] transition-colors"
+                    className="btn-icon"
+                    title="Очистить всё"
+                    style={{ marginLeft: "4px" }}
                   >
                     <Trash2 size={16} />
                   </button>
                 </div>
               </div>
 
-              <table className="w-full text-left">
-                <thead className="bg-[var(--paper)] text-[var(--graphite)] font-mono text-xs uppercase tracking-wider">
-                  <tr>
-                    <th className="p-4 font-semibold">
-                      <button
-                        onClick={() => toggleSort("name")}
-                        className="flex items-center gap-1 hover:text-[var(--navy)]"
-                      >
-                        ФИО <ArrowUpDown size={12} />
-                      </button>
-                    </th>
-                    <th className="p-4 font-semibold">
-                      <button
-                        onClick={() => toggleSort("score")}
-                        className="flex items-center gap-1 hover:text-[var(--navy)]"
-                      >
-                        Балл <ArrowUpDown size={12} />
-                      </button>
-                    </th>
-                    <th className="p-4 font-semibold">Статус</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredResults.map((res) => (
+              <div style={{ overflowX: "auto" }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    textAlign: "left",
+                  }}
+                >
+                  <thead>
                     <tr
-                      key={res._id}
-                      onClick={() => setSelectedId(res._id)}
-                      className={`ruled-row cursor-pointer hover:bg-[var(--navy-soft)] transition-colors ${
-                        selectedId === res._id ? "bg-[var(--navy-soft)]" : ""
-                      }`}
+                      style={{
+                        background: "#f9fafb",
+                        borderBottom: "1px solid var(--border)",
+                      }}
                     >
-                      <td className="p-4 font-medium text-[var(--ink)] flex items-center gap-2">
-                        {best && res.fio === best.fio && (
-                          <Crown
-                            size={14}
-                            className="text-[var(--amber)] shrink-0"
-                          />
-                        )}
-                        {res.fio}
-                      </td>
-                      <td className="p-4 font-mono">
-                        {res.score} / {res.maxScore}
-                      </td>
-                      <td className="p-4">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-mono font-semibold uppercase tracking-wide ${
-                            res.passed
-                              ? "bg-[var(--correct-soft)] text-[var(--correct)]"
-                              : "bg-[var(--incorrect-soft)] text-[var(--incorrect)]"
-                          }`}
+                      <th style={{ padding: "12px 20px" }}>
+                        <button
+                          onClick={() => toggleSort("name")}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            color: "var(--text-muted)",
+                          }}
                         >
-                          {res.passed ? "Сдал" : "Не сдал"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredResults.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={3}
-                        className="p-6 text-center text-[var(--graphite)] font-mono text-sm"
+                          ФИО <ArrowUpDown size={14} />
+                        </button>
+                      </th>
+                      <th style={{ padding: "12px 20px" }}>
+                        <button
+                          onClick={() => toggleSort("score")}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          Балл <ArrowUpDown size={14} />
+                        </button>
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px 20px",
+                          fontSize: "13px",
+                          fontWeight: "600",
+                          color: "var(--text-muted)",
+                        }}
                       >
-                        Ничего не найдено
-                      </td>
+                        Статус
+                      </th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filteredResults.map((res) => (
+                      <tr
+                        key={res._id}
+                        onClick={() => setSelectedId(res._id)}
+                        style={{
+                          borderBottom: "1px solid #f3f4f6",
+                          cursor: "pointer",
+                          background:
+                            selectedId === res._id ? "#eff6ff" : "white",
+                          transition: "background 0.2s",
+                        }}
+                        onMouseOver={(e) => {
+                          if (selectedId !== res._id)
+                            e.currentTarget.style.background = "#f9fafb";
+                        }}
+                        onMouseOut={(e) => {
+                          if (selectedId !== res._id)
+                            e.currentTarget.style.background = "white";
+                        }}
+                      >
+                        <td
+                          style={{
+                            padding: "16px 20px",
+                            fontWeight: "500",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          {best && res.fio === best.fio && (
+                            <Crown size={16} color="#d97706" />
+                          )}
+                          {res.fio}
+                        </td>
+                        <td style={{ padding: "16px 20px", fontWeight: "600" }}>
+                          {res.score}{" "}
+                          <span
+                            style={{
+                              color: "var(--text-muted)",
+                              fontSize: "12px",
+                              fontWeight: "400",
+                            }}
+                          >
+                            / {res.maxScore}
+                          </span>
+                        </td>
+                        <td style={{ padding: "16px 20px" }}>
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "4px 10px",
+                              borderRadius: "20px",
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              background: res.passed
+                                ? "var(--success-bg)"
+                                : "var(--danger-bg)",
+                              color: res.passed
+                                ? "var(--success)"
+                                : "var(--danger)",
+                            }}
+                          >
+                            {res.passed ? "Сдал" : "Не сдал"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredResults.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          style={{
+                            padding: "32px",
+                            textAlign: "center",
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          Ничего не найдено
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
-            {/* Детальный просмотр */}
+            {/* Детали студента */}
             {selectedStudent && (
-              <div className="flex-1 paper-card p-6">
-                <div className="flex items-center justify-between mb-3">
+              <div
+                className="card"
+                style={{ flex: "1 1 350px", position: "sticky", top: "24px" }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "20px",
+                  }}
+                >
                   <button
                     onClick={goPrev}
                     disabled={selectedIndexInList <= 0}
-                    className="font-mono text-xs uppercase tracking-wider text-[var(--graphite)] hover:text-[var(--navy)] disabled:opacity-30 disabled:hover:text-[var(--graphite)] transition-colors"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--primary)",
+                      cursor: selectedIndexInList <= 0 ? "default" : "pointer",
+                      opacity: selectedIndexInList <= 0 ? 0.3 : 1,
+                      fontSize: "13px",
+                      fontWeight: "600",
+                    }}
                   >
                     ← Пред.
                   </button>
-                  <span className="font-mono text-[11px] text-[var(--graphite)]">
-                    {selectedIndexInList + 1} / {filteredResults.length}
+                  <span className="text-muted" style={{ fontSize: "12px" }}>
+                    {selectedIndexInList + 1} из {filteredResults.length}
                   </span>
                   <button
                     onClick={goNext}
                     disabled={selectedIndexInList >= filteredResults.length - 1}
-                    className="font-mono text-xs uppercase tracking-wider text-[var(--graphite)] hover:text-[var(--navy)] disabled:opacity-30 disabled:hover:text-[var(--graphite)] transition-colors"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--primary)",
+                      cursor:
+                        selectedIndexInList >= filteredResults.length - 1
+                          ? "default"
+                          : "pointer",
+                      opacity:
+                        selectedIndexInList >= filteredResults.length - 1
+                          ? 0.3
+                          : 1,
+                      fontSize: "13px",
+                      fontWeight: "600",
+                    }}
                   >
                     След. →
                   </button>
                 </div>
-                <div className="flex items-start justify-between gap-4 mb-5">
-                  <div>
-                    <h3 className="text-lg font-bold text-[var(--ink)]">
-                      {selectedStudent.fio}
-                    </h3>
-                    <p className="font-mono text-xs text-[var(--graphite)] mt-1">
-                      Место {rankOf(selectedStudent._id)} из {totalStudents}
-                      {totalStudents > 1 && (
-                        <>
-                          {" "}
-                          ·{" "}
-                          {selectedStudent.score > avgScore ? (
-                            <span className="text-[var(--correct)] inline-flex items-center gap-1">
-                              <TrendingUp size={12} /> выше среднего
-                            </span>
-                          ) : selectedStudent.score < avgScore ? (
-                            <span className="text-[var(--incorrect)] inline-flex items-center gap-1">
-                              <TrendingDown size={12} /> ниже среднего
-                            </span>
-                          ) : (
-                            <span className="text-[var(--ink-soft)]">
-                              на уровне среднего
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </p>
-                  </div>
-                  <span
-                    className={`stamp text-sm ${
-                      selectedStudent.passed
-                        ? "text-[var(--correct)]"
-                        : "text-[var(--incorrect)]"
-                    }`}
+
+                <div style={{ marginBottom: "24px" }}>
+                  <h2
+                    style={{
+                      fontSize: "20px",
+                      fontWeight: "700",
+                      marginBottom: "4px",
+                    }}
                   >
-                    {selectedStudent.score}/{selectedStudent.maxScore}
-                  </span>
+                    {selectedStudent.fio}
+                  </h2>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "12px",
+                      alignItems: "center",
+                      fontSize: "13px",
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    <span>
+                      Место {rankOf(selectedStudent._id)} из {totalStudents}
+                    </span>
+                    {totalStudents > 1 && (
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          color:
+                            selectedStudent.score > avgScore
+                              ? "var(--success)"
+                              : selectedStudent.score < avgScore
+                                ? "var(--danger)"
+                                : "inherit",
+                        }}
+                      >
+                        {selectedStudent.score > avgScore ? (
+                          <TrendingUp size={14} />
+                        ) : selectedStudent.score < avgScore ? (
+                          <TrendingDown size={14} />
+                        ) : null}
+                        {selectedStudent.score > avgScore
+                          ? "Выше среднего"
+                          : selectedStudent.score < avgScore
+                            ? "Ниже среднего"
+                            : "Средний результат"}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {/* сравнение со средним */}
-                {totalStudents > 1 && (
-                  <div className="mb-5">
-                    <div className="flex justify-between font-mono text-[11px] text-[var(--graphite)] mb-1">
-                      <span>Результат</span>
-                      <span>Средний балл: {avgScore.toFixed(1)}</span>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "16px",
+                    marginBottom: "24px",
+                    padding: "16px",
+                    background: "#f9fafb",
+                    borderRadius: "12px",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "var(--text-muted)",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Набрано баллов
                     </div>
-                    <div className="bar-track h-2.5 relative">
-                      <div
-                        className="bar-fill"
+                    <div
+                      style={{
+                        fontSize: "24px",
+                        fontWeight: "700",
+                        color: selectedStudent.passed
+                          ? "var(--success)"
+                          : "var(--danger)",
+                      }}
+                    >
+                      {selectedStudent.score}{" "}
+                      <span
                         style={{
-                          width: `${(selectedStudent.score / selectedStudent.maxScore) * 100}%`,
-                          background: selectedStudent.passed
-                            ? "var(--correct)"
-                            : "var(--incorrect)",
+                          fontSize: "16px",
+                          color: "var(--text-muted)",
+                          fontWeight: "500",
                         }}
-                      />
-                      {selectedStudent.maxScore > 0 && (
-                        <div
-                          className="absolute top-[-3px] w-[2px] h-[14px] bg-[var(--ink)]"
-                          style={{
-                            left: `${(avgScore / selectedStudent.maxScore) * 100}%`,
-                          }}
-                          title="Средний балл группы"
-                        />
-                      )}
+                      >
+                        / {selectedStudent.maxScore}
+                      </span>
                     </div>
                   </div>
-                )}
+                  <div
+                    style={{ width: "1px", background: "var(--border)" }}
+                  ></div>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "var(--text-muted)",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Статус
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        marginTop: "6px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        color: selectedStudent.passed
+                          ? "var(--success)"
+                          : "var(--danger)",
+                      }}
+                    >
+                      {selectedStudent.passed ? (
+                        <CheckCircle size={18} />
+                      ) : (
+                        <XCircle size={18} />
+                      )}
+                      {selectedStudent.passed ? "Пройден" : "Провален"}
+                    </div>
+                  </div>
+                </div>
 
-                <div className="space-y-4 max-h-[420px] overflow-y-auto pr-2">
+                <div
+                  style={{
+                    maxHeight: "400px",
+                    overflowY: "auto",
+                    paddingRight: "8px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                  }}
+                >
                   {selectedStudent.details.map((det, idx) => (
                     <div
                       key={idx}
-                      className={`p-4 rounded-lg border-l-4 ${
-                        det.isCorrect
-                          ? "border-[var(--correct)] bg-[var(--correct-soft)]"
-                          : "border-[var(--incorrect)] bg-[var(--incorrect-soft)]"
-                      }`}
+                      style={{
+                        padding: "16px",
+                        borderRadius: "12px",
+                        border: "1px solid var(--border)",
+                        borderLeft: `4px solid ${det.isCorrect ? "var(--success)" : "var(--danger)"}`,
+                        background: det.isCorrect
+                          ? "var(--success-bg)"
+                          : "var(--danger-bg)",
+                      }}
                     >
-                      <p className="font-semibold text-[var(--ink)] mb-2 text-sm">
+                      <p
+                        style={{
+                          fontWeight: "600",
+                          fontSize: "14px",
+                          marginBottom: "8px",
+                        }}
+                      >
                         {idx + 1}. {det.question}
                       </p>
-                      <div className="flex items-center justify-between text-xs font-mono">
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          fontSize: "13px",
+                        }}
+                      >
                         <span
-                          className={
-                            det.isCorrect
-                              ? "text-[var(--correct)] font-medium"
-                              : "text-[var(--incorrect)] font-medium"
-                          }
+                          style={{
+                            fontWeight: "600",
+                            color: det.isCorrect
+                              ? "var(--success)"
+                              : "var(--danger)",
+                          }}
                         >
                           {det.isCorrect ? "✓ Верно" : "✗ Ошибка"}
                         </span>
                         {!det.isCorrect && (
-                          <span className="text-[var(--ink-soft)]">
-                            выбрано:{" "}
-                            {det.userAnswers
-                              .map((i) => letterFor(i))
-                              .join(", ") || "—"}{" "}
-                            · верно:{" "}
-                            {det.correctAnswers
-                              .map((i) => letterFor(i))
-                              .join(", ")}
+                          <span style={{ color: "var(--text-muted)" }}>
+                            Выбрано:{" "}
+                            <b style={{ color: "var(--text-main)" }}>
+                              {det.userAnswers
+                                .map((i) => letterFor(i))
+                                .join(", ") || "—"}
+                            </b>{" "}
+                            · Верно:{" "}
+                            <b style={{ color: "var(--text-main)" }}>
+                              {det.correctAnswers
+                                .map((i) => letterFor(i))
+                                .join(", ")}
+                            </b>
                           </span>
                         )}
                       </div>
@@ -635,48 +966,70 @@ export default function Analyzer() {
   );
 }
 
-function StatCard({ icon, value, label, tone }) {
-  const toneColor =
-    tone === "correct"
-      ? "var(--correct)"
-      : tone === "incorrect"
-        ? "var(--incorrect)"
-        : tone === "navy"
-          ? "var(--navy)"
-          : "var(--ink)";
+function StatCard({ icon, value, label, color = "var(--text-main)" }) {
   return (
-    <div className="paper-card p-5 flex flex-col items-center justify-center text-center gap-1.5">
-      {icon && <div style={{ color: toneColor }}>{icon}</div>}
+    <div
+      className="card"
+      style={{
+        padding: "20px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        marginBottom: 0,
+      }}
+    >
+      {icon && <div style={{ color, marginBottom: "8px" }}>{icon}</div>}
       {value !== null && value !== undefined && (
         <div
-          className="text-2xl font-bold font-mono"
-          style={{ color: toneColor }}
+          style={{
+            fontSize: "24px",
+            fontWeight: "700",
+            color,
+            lineHeight: "1.2",
+            marginBottom: "4px",
+          }}
         >
           {value}
         </div>
       )}
-      <div className="text-xs font-mono uppercase tracking-wide text-[var(--graphite)]">
+      <div
+        style={{
+          fontSize: "12px",
+          fontWeight: "600",
+          color: "var(--text-muted)",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+        }}
+      >
         {label}
       </div>
     </div>
   );
 }
 
-function FilterPill({ active, onClick, children, tone }) {
-  const activeBg =
-    tone === "correct"
-      ? "bg-[var(--correct-soft)] text-[var(--correct)] border-[var(--correct)]"
-      : tone === "incorrect"
-        ? "bg-[var(--incorrect-soft)] text-[var(--incorrect)] border-[var(--incorrect)]"
-        : "bg-[var(--navy-soft)] text-[var(--navy)] border-[var(--navy)]";
+function FilterPill({ active, onClick, children, color = "var(--primary)" }) {
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-xs font-mono border transition-colors ${
-        active
-          ? activeBg
-          : "border-[var(--line-strong)] text-[var(--graphite)] hover:bg-[var(--paper)]"
-      }`}
+      style={{
+        padding: "6px 14px",
+        borderRadius: "20px",
+        fontSize: "13px",
+        fontWeight: "600",
+        cursor: "pointer",
+        border: `1px solid ${active ? color : "var(--border)"}`,
+        background: active
+          ? color === "var(--primary)"
+            ? "#eff6ff"
+            : color === "var(--success)"
+              ? "var(--success-bg)"
+              : "var(--danger-bg)"
+          : "transparent",
+        color: active ? color : "var(--text-muted)",
+        transition: "all 0.2s",
+      }}
     >
       {children}
     </button>
