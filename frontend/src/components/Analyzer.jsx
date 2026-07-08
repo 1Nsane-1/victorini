@@ -10,12 +10,17 @@ import {
   Trash2,
   TrendingUp,
   TrendingDown,
+  Download,
+  FolderPlus,
+  Edit3,
 } from "lucide-react";
 
 const letterFor = (i) => String.fromCharCode(65 + i);
 
-const STORAGE_KEY = "quiz-builder:analyzer-results";
-const MAX_RESULTS = 50;
+const STORAGE_RESULTS_KEY = "quiz-builder:analyzer-results-v2";
+const STORAGE_FOLDERS_KEY = "quiz-builder:analyzer-folders";
+const MAX_FOLDERS = 15;
+const MAX_RESULTS_PER_FOLDER = 100;
 
 const makeId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
@@ -23,15 +28,29 @@ const makeId = () =>
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export default function Analyzer() {
+  // Список папок
+  const [folders, setFolders] = useState(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_FOLDERS_KEY);
+      return raw ? JSON.parse(raw) : ["ИСП33", "Другие", "Архив"];
+    } catch {
+      return ["ИСП33", "Другие", "Архив"];
+    }
+  });
+
+  const [currentFolder, setCurrentFolder] = useState(folders[0] || "ИСП33");
+
+  // Все результаты. Каждый объект теперь имеет свойство folder
   const [results, setResults] = useState(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_RESULTS_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
       return parsed.map((r) => (r._id ? r : { ...r, _id: makeId() }));
     } catch {
       return [];
     }
   });
+
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -39,10 +58,13 @@ export default function Analyzer() {
   const [sortDir, setSortDir] = useState("desc");
   const [notice, setNotice] = useState("");
 
+  // Сохранение данных в LocalStorage
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(results));
-    } catch {}
+    localStorage.setItem(STORAGE_FOLDERS_KEY, JSON.stringify(folders));
+  }, [folders]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_RESULTS_KEY, JSON.stringify(results));
   }, [results]);
 
   useEffect(() => {
@@ -51,47 +73,182 @@ export default function Analyzer() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  const selectedStudent = results.find((r) => r._id === selectedId) || null;
+  // Фильтруем результаты строго по текущей активной папке
+  const folderResults = useMemo(() => {
+    return results.filter((r) => r.folder === currentFolder);
+  }, [results, currentFolder]);
 
-  const handleFileUpload = (e) => {
+  const selectedStudent =
+    folderResults.find((r) => r._id === selectedId) || null;
+
+  // Управление папками
+  const handleAddFolder = () => {
+    if (folders.length >= MAX_FOLDERS) {
+      alert(`Нельзя создать более ${MAX_FOLDERS} папок.`);
+      return;
+    }
+    const name = prompt("Введите название новой папки:");
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    if (folders.includes(trimmed)) {
+      alert("Папка с таким названием уже существует.");
+      return;
+    }
+    setFolders([...folders, trimmed]);
+    setCurrentFolder(trimmed);
+  };
+
+  const handleRenameFolder = () => {
+    const newName = prompt(
+      `Переименовать папку "${currentFolder}" в:`,
+      currentFolder,
+    );
+    if (!newName || !newName.trim() || newName.trim() === currentFolder) return;
+    const trimmed = newName.trim();
+
+    if (folders.includes(trimmed)) {
+      alert("Папка с таким названием уже существует.");
+      return;
+    }
+
+    // Обновляем имя в списке папок и во всех связанных результатах
+    setFolders(folders.map((f) => (f === currentFolder ? trimmed : f)));
+    setResults(
+      results.map((r) =>
+        r.folder === currentFolder ? { ...r, folder: trimmed } : r,
+      ),
+    );
+    setCurrentFolder(trimmed);
+    setNotice(`Папка переименована в "${trimmed}"`);
+  };
+
+  const handleDeleteFolder = () => {
+    if (folders.length <= 1) {
+      alert("Должна оставаться как минимум одна папка.");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Вы уверены, что хотите удалить папку "${currentFolder}" и ВСЕ её результаты безвозвратно?`,
+      )
+    )
+      return;
+
+    const remainingFolders = folders.filter((f) => f !== currentFolder);
+    setResults(results.filter((r) => r.folder !== currentFolder));
+    setFolders(remainingFolders);
+    setCurrentFolder(remainingFolders[0]);
+    setSelectedId(null);
+    setNotice("Папка успешно удалена");
+  };
+
+  // Загрузка файлов
+  const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
+    if (!files.length) return;
+
+    // Проверяем лимит текущей папки
+    if (folderResults.length + files.length > MAX_RESULTS_PER_FOLDER) {
+      alert(
+        `Ошибка! В одной папке разрешено хранить не более ${MAX_RESULTS_PER_FOLDER} результатов. Сейчас в ней: ${folderResults.length}`,
+      );
+      e.target.value = "";
+      return;
+    }
+
+    // Чтение для UI
     files.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
           const json = JSON.parse(event.target.result);
-          setResults((prev) => {
-            const next = [...prev, { ...json, _id: makeId() }];
-            if (next.length > MAX_RESULTS) {
-              setNotice(
-                `Достигнут лимит ${MAX_RESULTS} результатов — старые записи удалены.`,
-              );
-              return next.slice(next.length - MAX_RESULTS);
-            }
-            return next;
-          });
+          setResults((prev) => [
+            ...prev,
+            { ...json, _id: makeId(), folder: currentFolder },
+          ]);
         } catch (error) {
-          console.error("Ошибка чтения файла", file.name);
+          console.error("Ошибка чтения локального файла", file.name);
         }
       };
       reader.readAsText(file);
     });
+
+    // Отправка на бэкенд
+    const formData = new FormData();
+    files.forEach((f) => formData.append("files", f));
+    formData.append("folder", currentFolder);
+
+    try {
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (response.ok) {
+        setNotice(
+          `Файлы (${files.length} шт.) успешно загружены в папку: ${currentFolder}`,
+        );
+      }
+    } catch (err) {
+      console.error("Ошибка сохранения на сервере", err);
+    }
+
     e.target.value = "";
   };
 
-  const clearAll = () => {
-    if (!window.confirm("Очистить все загруженные результаты?")) return;
-    setResults([]);
-    setSelectedId(null);
+  // Экспорт
+  const handleExport = async (format) => {
+    if (!filteredResults.length) return;
+    setNotice(`Подготовка ${format.toUpperCase()}...`);
+
     try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {}
+      const res = await fetch(`/api/export/${format}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: filteredResults }),
+      });
+
+      if (!res.ok) throw new Error("Export failed");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${currentFolder}_results.${format === "excel" ? "xlsx" : format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setNotice("Ошибка экспорта");
+    }
   };
 
-  const totalStudents = results.length;
-  const passedStudents = results.filter((r) => r.passed).length;
+  // Поштучное удаление студента
+  const handleDeleteSingle = (id, e) => {
+    e.stopPropagation(); // Чтобы не срабатывал клик по строке (выбор студента)
+    if (!window.confirm("Удалить этот результат?")) return;
+
+    setResults(results.filter((r) => r._id !== id));
+    if (selectedId === id) setSelectedId(null);
+    setNotice("Результат удален");
+  };
+
+  // Очистка ВСЕЙ текущей папки
+  const clearCurrentFolder = () => {
+    if (
+      !window.confirm(
+        `Очистить все результаты внутри папки "${currentFolder}"?`,
+      )
+    )
+      return;
+    setResults(results.filter((r) => r.folder !== currentFolder));
+    setSelectedId(null);
+  };
+
+  // Вычисление изолированной статистики по выбранной папке
+  const totalStudents = folderResults.length;
+  const passedStudents = folderResults.filter((r) => r.passed).length;
   const avgScore = totalStudents
-    ? results.reduce((acc, curr) => acc + curr.score, 0) / totalStudents
+    ? folderResults.reduce((acc, curr) => acc + curr.score, 0) / totalStudents
     : 0;
   const passRate = totalStudents
     ? Math.round((passedStudents / totalStudents) * 100)
@@ -99,73 +256,24 @@ export default function Analyzer() {
 
   const median = useMemo(() => {
     if (!totalStudents) return 0;
-    const sorted = [...results].map((r) => r.score).sort((a, b) => a - b);
+    const sorted = [...folderResults].map((r) => r.score).sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
     return sorted.length % 2 !== 0
       ? sorted[mid]
       : (sorted[mid - 1] + sorted[mid]) / 2;
-  }, [results, totalStudents]);
+  }, [folderResults, totalStudents]);
 
   const best = useMemo(
     () =>
       totalStudents
-        ? results.reduce((a, b) => (b.score > a.score ? b : a))
+        ? folderResults.reduce((a, b) => (b.score > a.score ? b : a))
         : null,
-    [results, totalStudents],
-  );
-  const worst = useMemo(
-    () =>
-      totalStudents
-        ? results.reduce((a, b) => (b.score < a.score ? b : a))
-        : null,
-    [results, totalStudents],
+    [folderResults, totalStudents],
   );
 
-  const distribution = useMemo(() => {
-    const buckets = [
-      { label: "0–20%", min: 0, max: 20, count: 0 },
-      { label: "20–40%", min: 20, max: 40, count: 0 },
-      { label: "40–60%", min: 40, max: 60, count: 0 },
-      { label: "60–80%", min: 60, max: 80, count: 0 },
-      { label: "80–100%", min: 80, max: 101, count: 0 },
-    ];
-    results.forEach((r) => {
-      const pct = r.maxScore ? (r.score / r.maxScore) * 100 : 0;
-      const bucket =
-        buckets.find((b) => pct >= b.min && pct < b.max) ||
-        buckets[buckets.length - 1];
-      bucket.count += 1;
-    });
-    return buckets;
-  }, [results]);
-  const maxBucket = Math.max(1, ...distribution.map((b) => b.count));
-
-  const questionStats = useMemo(() => {
-    const map = new Map();
-    results.forEach((r) => {
-      (r.details || []).forEach((det) => {
-        if (!map.has(det.question)) {
-          map.set(det.question, {
-            question: det.question,
-            total: 0,
-            correct: 0,
-          });
-        }
-        const entry = map.get(det.question);
-        entry.total += 1;
-        if (det.isCorrect) entry.correct += 1;
-      });
-    });
-    return Array.from(map.values())
-      .map((e) => ({
-        ...e,
-        rate: e.total ? Math.round((e.correct / e.total) * 100) : 0,
-      }))
-      .sort((a, b) => a.rate - b.rate);
-  }, [results]);
-
+  // Фильтрация и сортировка таблицы (внутри текущей папки)
   const filteredResults = useMemo(() => {
-    return results
+    return folderResults
       .filter((r) => (r.fio || "").toLowerCase().includes(search.toLowerCase()))
       .filter((r) => {
         if (statusFilter === "passed") return r.passed;
@@ -179,7 +287,7 @@ export default function Analyzer() {
           cmp = (a.fio || "").localeCompare(b.fio || "", "ru");
         return sortDir === "asc" ? cmp : -cmp;
       });
-  }, [results, search, statusFilter, sortKey, sortDir]);
+  }, [folderResults, search, statusFilter, sortKey, sortDir]);
 
   const toggleSort = (key) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -190,17 +298,19 @@ export default function Analyzer() {
   };
 
   const rankOf = (id) => {
-    const sorted = [...results].sort((a, b) => b.score - a.score);
+    const sorted = [...folderResults].sort((a, b) => b.score - a.score);
     return sorted.findIndex((r) => r._id === id) + 1;
   };
 
   const selectedIndexInList = selectedStudent
     ? filteredResults.findIndex((r) => r._id === selectedStudent._id)
     : -1;
+
   const goPrev = () => {
     if (selectedIndexInList > 0)
       setSelectedId(filteredResults[selectedIndexInList - 1]._id);
   };
+
   const goNext = () => {
     if (
       selectedIndexInList >= 0 &&
@@ -211,15 +321,94 @@ export default function Analyzer() {
 
   return (
     <div>
-      {/* Зона загрузки */}
+      {/* ПАНЕЛЬ УПРАВЛЕНИЯ ПАПКАМИ */}
+      <div
+        className="card"
+        style={{ marginBottom: "20px", padding: "16px 20px" }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "16px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <label
+              style={{
+                fontSize: "14px",
+                fontWeight: "700",
+                color: "var(--text-main)",
+              }}
+            >
+              Активная папка ({folders.length}/{MAX_FOLDERS}):
+            </label>
+            <select
+              value={currentFolder}
+              onChange={(e) => {
+                setCurrentFolder(e.target.value);
+                setSelectedId(null);
+              }}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                outline: "none",
+                fontWeight: "600",
+                backgroundColor: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              {folders.map((folder) => (
+                <option key={folder} value={folder}>
+                  {folder}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              onClick={handleAddFolder}
+              style={folderActionBtnStyle}
+              title="Создать новую папку"
+            >
+              <FolderPlus size={16} /> Добавить
+            </button>
+            <button
+              onClick={handleRenameFolder}
+              style={folderActionBtnStyle}
+              title="Переименовать текущую папку"
+            >
+              <Edit3 size={16} /> Переименовать
+            </button>
+            <button
+              onClick={handleDeleteFolder}
+              style={{
+                ...folderActionBtnStyle,
+                color: "var(--danger)",
+                borderColor: "rgba(239,68,68,0.2)",
+              }}
+              title="Удалить папку и данные"
+            >
+              <Trash2 size={16} /> Удалить папку
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Зона загрузки файлов */}
       <div
         className="card"
         style={{
           border: "2px dashed var(--border)",
           textAlign: "center",
           position: "relative",
-          cursor: "pointer",
           transition: "all 0.2s",
+          padding: "32px",
+          marginBottom: "24px",
         }}
         onMouseOver={(e) =>
           (e.currentTarget.style.borderColor = "var(--primary)")
@@ -238,6 +427,7 @@ export default function Analyzer() {
             inset: 0,
             opacity: 0,
             cursor: "pointer",
+            zIndex: 1,
           }}
         />
         <UploadCloud
@@ -247,18 +437,19 @@ export default function Analyzer() {
         <h3
           style={{ fontSize: "16px", fontWeight: "600", marginBottom: "4px" }}
         >
-          Загрузите файлы результатов (.json)
+          Загрузить файлы в папку «{currentFolder}»
         </h3>
-        <p className="text-muted">
-          Перетащите файлы сюда или нажмите для выбора
+        <p className="text-muted" style={{ fontSize: "13px" }}>
+          Перетащите результаты (.json) сюда. Лимит: {totalStudents} /{" "}
+          {MAX_RESULTS_PER_FOLDER} файлов.
         </p>
       </div>
 
       {notice && (
         <div
           style={{
-            background: "var(--danger-bg)",
-            color: "var(--danger)",
+            background: "var(--success-bg)",
+            color: "var(--success)",
             padding: "12px 16px",
             borderRadius: "10px",
             marginBottom: "24px",
@@ -270,7 +461,19 @@ export default function Analyzer() {
         </div>
       )}
 
-      {totalStudents > 0 && (
+      {totalStudents === 0 ? (
+        <div
+          className="card"
+          style={{
+            textAlign: "center",
+            padding: "48px",
+            color: "var(--text-muted)",
+          }}
+        >
+          В папке <b>{currentFolder}</b> пока нет загруженных результатов.
+          Статистика появится после импорта файлов.
+        </div>
+      ) : (
         <>
           {/* Сводная статистика */}
           <div
@@ -307,167 +510,13 @@ export default function Analyzer() {
             <StatCard value={median} label="Медиана" />
             <StatCard
               icon={<Crown size={18} />}
-              value={best?.score}
+              value={best?.score || 0}
               label={`Лучший: ${best?.fio?.split(" ")[0] || "—"}`}
               color="#d97706"
             />
           </div>
 
-          {/* Графики */}
-          {totalStudents > 1 && (
-            <div className="grid-2" style={{ marginBottom: "24px" }}>
-              <div className="card" style={{ marginBottom: 0 }}>
-                <h3
-                  className="text-muted"
-                  style={{
-                    fontSize: "12px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    marginBottom: "16px",
-                    fontWeight: "600",
-                  }}
-                >
-                  Распределение результатов
-                </h3>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "12px",
-                  }}
-                >
-                  {distribution.map((b) => (
-                    <div
-                      key={b.label}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
-                      }}
-                    >
-                      <span
-                        className="text-muted"
-                        style={{
-                          fontSize: "13px",
-                          width: "60px",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {b.label}
-                      </span>
-                      <div
-                        style={{
-                          flex: 1,
-                          height: "8px",
-                          background: "var(--border)",
-                          borderRadius: "10px",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${(b.count / maxBucket) * 100}%`,
-                            background: "var(--primary)",
-                            height: "100%",
-                            borderRadius: "10px",
-                            transition: "width 0.5s",
-                          }}
-                        />
-                      </div>
-                      <span
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: "600",
-                          width: "20px",
-                          textAlign: "right",
-                        }}
-                      >
-                        {b.count}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="card" style={{ marginBottom: 0 }}>
-                <h3
-                  className="text-muted"
-                  style={{
-                    fontSize: "12px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    marginBottom: "16px",
-                    fontWeight: "600",
-                  }}
-                >
-                  Сложность вопросов (верные ответы)
-                </h3>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "16px",
-                    maxHeight: "200px",
-                    overflowY: "auto",
-                    paddingRight: "8px",
-                  }}
-                >
-                  {questionStats.map((q, idx) => (
-                    <div key={idx}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: "13px",
-                          marginBottom: "6px",
-                          gap: "12px",
-                        }}
-                      >
-                        <span
-                          style={{
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {q.question}
-                        </span>
-                        <span
-                          style={{
-                            fontWeight: "600",
-                            color:
-                              q.rate < 50 ? "var(--danger)" : "var(--success)",
-                          }}
-                        >
-                          {q.rate}%
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          height: "6px",
-                          background: "var(--border)",
-                          borderRadius: "10px",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${q.rate}%`,
-                            background:
-                              q.rate < 50 ? "var(--danger)" : "var(--success)",
-                            height: "100%",
-                            borderRadius: "10px",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Нижняя часть: Таблица и Детали */}
+          {/* Нижняя часть: Таблица результатов и Панель Деталей */}
           <div
             style={{
               display: "flex",
@@ -518,8 +567,14 @@ export default function Analyzer() {
                     }}
                   />
                 </div>
+
                 <div
-                  style={{ display: "flex", gap: "8px", alignItems: "center" }}
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
                 >
                   <FilterPill
                     active={statusFilter === "all"}
@@ -541,15 +596,55 @@ export default function Analyzer() {
                   >
                     Не сдали
                   </FilterPill>
-                  <button
-                    onClick={clearAll}
-                    className="btn-icon"
-                    title="Очистить всё"
-                    style={{ marginLeft: "4px" }}
-                  >
-                    <Trash2 size={16} />
-                  </button>
                 </div>
+              </div>
+
+              {/* Действия над таблицей */}
+              <div
+                style={{
+                  padding: "12px 20px",
+                  background: "#f9fafb",
+                  display: "flex",
+                  gap: "8px",
+                  borderBottom: "1px solid var(--border)",
+                  alignItems: "center",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    marginRight: "8px",
+                  }}
+                >
+                  Экспорт папки:
+                </span>
+                <button
+                  onClick={() => handleExport("pdf")}
+                  style={exportBtnStyle}
+                >
+                  <Download size={14} /> PDF
+                </button>
+                <button
+                  onClick={() => handleExport("docx")}
+                  style={exportBtnStyle}
+                >
+                  <Download size={14} /> DOCX
+                </button>
+                <button
+                  onClick={() => handleExport("excel")}
+                  style={exportBtnStyle}
+                >
+                  <Download size={14} /> EXCEL
+                </button>
+                <button
+                  onClick={clearCurrentFolder}
+                  className="btn-icon"
+                  title="Очистить всю папку"
+                  style={{ marginLeft: "auto", color: "var(--danger)" }}
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
 
               <div style={{ overflowX: "auto" }}>
@@ -570,17 +665,7 @@ export default function Analyzer() {
                       <th style={{ padding: "12px 20px" }}>
                         <button
                           onClick={() => toggleSort("name")}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            fontSize: "13px",
-                            fontWeight: "600",
-                            color: "var(--text-muted)",
-                          }}
+                          style={tableHeaderBtnStyle}
                         >
                           ФИО <ArrowUpDown size={14} />
                         </button>
@@ -588,17 +673,7 @@ export default function Analyzer() {
                       <th style={{ padding: "12px 20px" }}>
                         <button
                           onClick={() => toggleSort("score")}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            fontSize: "13px",
-                            fontWeight: "600",
-                            color: "var(--text-muted)",
-                          }}
+                          style={tableHeaderBtnStyle}
                         >
                           Балл <ArrowUpDown size={14} />
                         </button>
@@ -613,6 +688,9 @@ export default function Analyzer() {
                       >
                         Статус
                       </th>
+                      <th
+                        style={{ padding: "12px 20px", textAlign: "center" }}
+                      ></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -627,14 +705,7 @@ export default function Analyzer() {
                             selectedId === res._id ? "#eff6ff" : "white",
                           transition: "background 0.2s",
                         }}
-                        onMouseOver={(e) => {
-                          if (selectedId !== res._id)
-                            e.currentTarget.style.background = "#f9fafb";
-                        }}
-                        onMouseOut={(e) => {
-                          if (selectedId !== res._id)
-                            e.currentTarget.style.background = "white";
-                        }}
+                        className="table-row-hover"
                       >
                         <td
                           style={{
@@ -666,7 +737,6 @@ export default function Analyzer() {
                           <span
                             style={{
                               display: "inline-flex",
-                              alignItems: "center",
                               padding: "4px 10px",
                               borderRadius: "20px",
                               fontSize: "12px",
@@ -682,12 +752,37 @@ export default function Analyzer() {
                             {res.passed ? "Сдал" : "Не сдал"}
                           </span>
                         </td>
+                        {/* Кнопка удаления отдельной записи */}
+                        <td
+                          style={{ padding: "16px 20px", textAlign: "center" }}
+                        >
+                          <button
+                            onClick={(e) => handleDeleteSingle(res._id, e)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "var(--text-muted)",
+                              cursor: "pointer",
+                              padding: "4px",
+                            }}
+                            onMouseOver={(e) =>
+                              (e.currentTarget.style.color = "var(--danger)")
+                            }
+                            onMouseOut={(e) =>
+                              (e.currentTarget.style.color =
+                                "var(--text-muted)")
+                            }
+                            title="Удалить этот результат"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                     {filteredResults.length === 0 && (
                       <tr>
                         <td
-                          colSpan={3}
+                          colSpan={4}
                           style={{
                             padding: "32px",
                             textAlign: "center",
@@ -712,6 +807,7 @@ export default function Analyzer() {
                 <div
                   style={{
                     display: "flex",
+                    justifyBox: "space-between",
                     justifyContent: "space-between",
                     alignItems: "center",
                     marginBottom: "20px",
@@ -720,15 +816,7 @@ export default function Analyzer() {
                   <button
                     onClick={goPrev}
                     disabled={selectedIndexInList <= 0}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--primary)",
-                      cursor: selectedIndexInList <= 0 ? "default" : "pointer",
-                      opacity: selectedIndexInList <= 0 ? 0.3 : 1,
-                      fontSize: "13px",
-                      fontWeight: "600",
-                    }}
+                    style={navStudentBtnStyle(selectedIndexInList <= 0)}
                   >
                     ← Пред.
                   </button>
@@ -738,21 +826,9 @@ export default function Analyzer() {
                   <button
                     onClick={goNext}
                     disabled={selectedIndexInList >= filteredResults.length - 1}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--primary)",
-                      cursor:
-                        selectedIndexInList >= filteredResults.length - 1
-                          ? "default"
-                          : "pointer",
-                      opacity:
-                        selectedIndexInList >= filteredResults.length - 1
-                          ? 0.3
-                          : 1,
-                      fontSize: "13px",
-                      fontWeight: "600",
-                    }}
+                    style={navStudentBtnStyle(
+                      selectedIndexInList >= filteredResults.length - 1,
+                    )}
                   >
                     След. →
                   </button>
@@ -966,6 +1042,7 @@ export default function Analyzer() {
   );
 }
 
+// Вспомогательные компоненты / стили
 function StatCard({ icon, value, label, color = "var(--text-main)" }) {
   return (
     <div
@@ -981,19 +1058,17 @@ function StatCard({ icon, value, label, color = "var(--text-main)" }) {
       }}
     >
       {icon && <div style={{ color, marginBottom: "8px" }}>{icon}</div>}
-      {value !== null && value !== undefined && (
-        <div
-          style={{
-            fontSize: "24px",
-            fontWeight: "700",
-            color,
-            lineHeight: "1.2",
-            marginBottom: "4px",
-          }}
-        >
-          {value}
-        </div>
-      )}
+      <div
+        style={{
+          fontSize: "24px",
+          fontWeight: "700",
+          color,
+          lineHeight: "1.2",
+          marginBottom: "4px",
+        }}
+      >
+        {value}
+      </div>
       <div
         style={{
           fontSize: "12px",
@@ -1035,3 +1110,54 @@ function FilterPill({ active, onClick, children, color = "var(--primary)" }) {
     </button>
   );
 }
+
+const folderActionBtnStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  padding: "8px 14px",
+  borderRadius: "8px",
+  border: "1px solid var(--border)",
+  background: "#fff",
+  fontSize: "13px",
+  fontWeight: "600",
+  color: "var(--text-main)",
+  cursor: "pointer",
+  transition: "all 0.2s",
+};
+
+const exportBtnStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  padding: "6px 12px",
+  borderRadius: "8px",
+  border: "1px solid var(--border)",
+  background: "white",
+  color: "var(--text-main)",
+  fontSize: "13px",
+  fontWeight: "600",
+  cursor: "pointer",
+};
+
+const tableHeaderBtnStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "4px",
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  fontSize: "13px",
+  fontWeight: "600",
+  color: "var(--text-muted)",
+};
+
+const navStudentBtnStyle = (disabled) => ({
+  background: "none",
+  border: "none",
+  color: "var(--primary)",
+  cursor: disabled ? "default" : "pointer",
+  opacity: disabled ? 0.3 : 1,
+  fontSize: "13px",
+  fontWeight: "600",
+});

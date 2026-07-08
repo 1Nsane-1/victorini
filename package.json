@@ -2,10 +2,10 @@
   "name": "victorini-root",
   "version": "1.0.0",
   "scripts": {
-    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
-    "dev": "concurrently \"cd backend && npm start\" \"cd frontend && npm run dev\"",
-    "build": "cd frontend && npm run build",
-    "start": "cd backend && npm start"
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
+    "dev": "concurrently \"npm start --prefix backend\" \"npm run dev --prefix frontend\"",
+    "build": "npm run build --prefix frontend",
+    "start": "npm start --prefix backend"
   },
   "dependencies": {
     "concurrently": "^8.2.2"
