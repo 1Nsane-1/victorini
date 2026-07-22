@@ -135,8 +135,20 @@ app.post("/api/export/docx", async (req, res) => {
   res.send(b64string);
 });
 
-// 3. Раздача статики и маршрутизация React
+// 3. Раздача статики и маршрутизация
 const frontendBuildPath = path.join(__dirname, "../frontend/dist");
+
+// Если сборка фронтенда есть (например, локально), отдаем её. Если нет (на Render) — отдаем простой статус.
+if (fs.existsSync(frontendBuildPath)) {
+  app.use(express.static(frontendBuildPath));
+  app.get(/^(?!\/api).*/, (req, res) => {
+    res.sendFile(path.join(frontendBuildPath, "index.html"));
+  });
+} else {
+  app.get("/", (req, res) => {
+    res.send("Victorini API Server is live and running!");
+  });
+}
 app.use(express.static(frontendBuildPath));
 
 app.get(/^(?!\/api).*/, (req, res) => {
