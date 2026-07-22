@@ -1,0 +1,29 @@
+{
+  "fio": "иии",
+  "score": 2,
+  "maxScore": 2,
+  "passed": true,
+  "details": [
+    {
+      "question": "1",
+      "isCorrect": true,
+      "userAnswers": [
+        0
+      ],
+      "correctAnswers": [
+        0
+      ]
+    },
+    {
+      "question": "2",
+      "isCorrect": true,
+      "userAnswers": [
+        1
+      ],
+      "correctAnswers": [
+        1
+      ]
+    }
+  ],
+  "timestamp": "2026-07-22T06:44:25.787Z"
+}

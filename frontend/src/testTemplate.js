@@ -29,7 +29,7 @@ export const generateTestHTML = (quizData) => {
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Введите ваше ФИО</label>
-                        <input type="text" id="fio" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Иванов Иван Иванович">
+                        <input type="text" id="fio" onkeydown="if(event.key === 'Enter') startTest()" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Иванов Иван Иванович">
                     </div>
                     <button onclick="startTest()" class="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition">Начать тест</button>
                 </div>
@@ -116,7 +116,14 @@ export const generateTestHTML = (quizData) => {
 
             const maxScore = quizData.questions.length * (quizData.pointsPerQuestion || 1);
             const passScore = quizData.passScore || (maxScore / 2);
-            const passed = score >= passScore;
+            
+            let passed = false;
+            if (quizData.passMode === 'percentage') {
+                const percentScored = (score / maxScore) * 100;
+                passed = percentScored >= passScore;
+            } else {
+                passed = score >= passScore;
+            }
 
             const resultData = {
                 fio: currentUser,

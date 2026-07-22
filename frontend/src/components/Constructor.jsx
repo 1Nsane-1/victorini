@@ -9,6 +9,7 @@ export default function Constructor() {
     title: "Новый тест",
     pointsPerQuestion: 1,
     passScore: 50,
+    passMode: "absolute", // Добавили режим по умолчанию: 'absolute' (баллы) или 'percentage' (проценты)
   });
   const [questions, setQuestions] = useState([]);
 
@@ -128,15 +129,110 @@ export default function Constructor() {
             />
           </div>
           <div className="form-group mb-0">
-            <label className="form-label">Проходной балл</label>
-            <input
-              type="number"
-              value={settings.passScore}
-              onChange={(e) =>
-                setSettings({ ...settings, passScore: Number(e.target.value) })
-              }
-              className="input-field"
-            />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "8px",
+              }}
+            >
+              <label className="form-label" style={{ marginBottom: 0 }}>
+                Проходной порог
+              </label>
+
+              {/* Переключатель режимов */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "4px",
+                  background: "#f3f4f6",
+                  padding: "2px",
+                  borderRadius: "6px",
+                }}
+              >
+                <button
+                  onClick={() =>
+                    setSettings({ ...settings, passMode: "absolute" })
+                  }
+                  style={{
+                    padding: "2px 8px",
+                    fontSize: "12px",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    background:
+                      settings.passMode === "absolute"
+                        ? "white"
+                        : "transparent",
+                    boxShadow:
+                      settings.passMode === "absolute"
+                        ? "0 1px 3px rgba(0,0,0,0.1)"
+                        : "none",
+                    fontWeight:
+                      settings.passMode === "absolute" ? "600" : "400",
+                    color: "var(--text-main)",
+                  }}
+                >
+                  В баллах
+                </button>
+                <button
+                  onClick={() =>
+                    setSettings({ ...settings, passMode: "percentage" })
+                  }
+                  style={{
+                    padding: "2px 8px",
+                    fontSize: "12px",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    background:
+                      settings.passMode === "percentage"
+                        ? "white"
+                        : "transparent",
+                    boxShadow:
+                      settings.passMode === "percentage"
+                        ? "0 1px 3px rgba(0,0,0,0.1)"
+                        : "none",
+                    fontWeight:
+                      settings.passMode === "percentage" ? "600" : "400",
+                    color: "var(--text-main)",
+                  }}
+                >
+                  В процентах
+                </button>
+              </div>
+            </div>
+
+            <div style={{ position: "relative" }}>
+              <input
+                type="number"
+                value={settings.passScore}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    passScore: Number(e.target.value),
+                  })
+                }
+                className="input-field"
+                style={{
+                  paddingRight: "30px",
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
+              />
+              <span
+                style={{
+                  position: "absolute",
+                  right: "12px",
+                  top: "10px",
+                  color: "var(--text-muted)",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                }}
+              >
+                {settings.passMode === "percentage" ? "%" : ""}
+              </span>
+            </div>
           </div>
         </div>
       </div>

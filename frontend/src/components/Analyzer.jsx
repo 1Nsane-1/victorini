@@ -448,15 +448,24 @@ export default function Analyzer() {
       {notice && (
         <div
           style={{
+            position: "fixed",
+            top: "24px",
+            right: "24px",
+            zIndex: 9999,
             background: "var(--success-bg)",
             color: "var(--success)",
-            padding: "12px 16px",
-            borderRadius: "10px",
-            marginBottom: "24px",
-            fontWeight: "500",
+            padding: "16px 24px",
+            borderRadius: "12px",
+            boxShadow:
+              "0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)",
+            fontWeight: "600",
             fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            transition: "all 0.3s ease-in-out",
           }}
         >
+          <CheckCircle size={18} style={{ marginRight: "8px" }} />
           {notice}
         </div>
       )}
