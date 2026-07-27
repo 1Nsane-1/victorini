@@ -200,8 +200,10 @@ export default function Analyzer() {
     if (!filteredResults.length) return;
     setNotice(`Подготовка ${format.toUpperCase()}...`);
 
+    const API_URL = import.meta.env.VITE_API_URL || "";
+
     try {
-      const res = await fetch(`/api/export/${format}`, {
+      const res = await fetch(`${API_URL}/api/export/${format}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: filteredResults }),
