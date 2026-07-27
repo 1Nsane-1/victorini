@@ -75,13 +75,13 @@ app.post("/api/export/pdf", (req, res) => {
   res.setHeader("Content-Disposition", 'attachment; filename="results.pdf"');
   doc.pipe(res);
 
-  // Подключаем шрифт Arial для поддержки русского языка
-  const fontPath = path.join(__dirname, "Arial.ttf");
+  // Подключаем шрифт Roboto из папки fonts для поддержки русского языка
+  const fontPath = path.join(__dirname, "fonts", "Roboto-Regular.ttf");
   if (fs.existsSync(fontPath)) {
     doc.font(fontPath);
   } else {
     console.warn(
-      "⚠️ Файл Arial.ttf не найден в папке backend! Кириллица может отображаться некорректно.",
+      "⚠️ Файл Roboto-Regular.ttf не найден в папке fonts! Кириллица может отображаться некорректно.",
     );
   }
 
