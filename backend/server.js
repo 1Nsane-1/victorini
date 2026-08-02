@@ -6,6 +6,13 @@ const multer = require("multer");
 const ExcelJS = require("exceljs");
 const PDFDocument = require("pdfkit");
 const { Document, Packer, Paragraph, TextRun } = require("docx");
+require("dotenv").config();
+const mongoose = require("mongoose");
+
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ База данных MongoDB успешно подключена!"))
+  .catch((err) => console.error("❌ Ошибка подключения к MongoDB:", err));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
