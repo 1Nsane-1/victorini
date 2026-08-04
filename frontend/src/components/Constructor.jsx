@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { generateTestHTML } from "../testTemplate";
-import { Plus, Trash2, Download } from "lucide-react";
+import { Plus, Trash2, Download, CloudUpload } from "lucide-react";
 
 const letterFor = (i) => String.fromCharCode(65 + i);
 
@@ -87,7 +87,57 @@ export default function Constructor() {
     a.click();
     URL.revokeObjectURL(url);
   };
+  const saveSurveyToServer = async () => {
+    if (questions.length === 0) return alert("Добавьте хотя бы один вопрос");
 
+    // Такая же валидация, как при генерации HTML
+    for (let i = 0; i < questions.length; i++) {
+      if (!questions[i].text)
+        return alert(`Вопрос ${i + 1} не содержит текста`);
+      if (questions[i].correctAnswers.length === 0)
+        return alert(`Вопрос ${i + 1} не имеет правильного ответа`);
+    }
+
+    // Твой бэкенд ждет массив "blocks", поэтому превращаем вопросы в блоки
+    const blocks = questions.map((q) => ({
+      type: "question",
+      content: q,
+    }));
+
+    // Собираем всё в нужный для бэкенда формат
+    const surveyData = {
+      title: settings.title,
+      // Сохраняем твои настройки проходного балла прямо в описание (в формате JSON),
+      // чтобы потом легко их достать при прохождении теста
+      description: JSON.stringify(settings),
+      blocks: blocks,
+    };
+
+    try {
+      // Отправляем на твой бэкенд на Render
+      const response = await fetch(
+        "https://victorini.onrender.com/api/surveys",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(surveyData),
+        },
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert(`УРА! Тест успешно сохранен в базе данных!\nЕго ID: ${data._id}`);
+      } else {
+        alert("Ошибка при сохранении: " + (data.error || "Неизвестная ошибка"));
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Ошибка соединения с сервером. Бэкенд запущен?");
+    }
+  };
   const totalPossible =
     questions.length * (Number(settings.pointsPerQuestion) || 0);
 
@@ -330,6 +380,13 @@ export default function Constructor() {
       <div className="actions-row">
         <button onClick={addQuestion} className="btn btn-outline">
           <Plus size={18} /> Добавить вопрос
+        </button>
+        <button
+          onClick={saveSurveyToServer}
+          className="btn btn-primary"
+          style={{ background: "#10b981", borderColor: "#10b981" }}
+        >
+          <CloudUpload size={18} /> В базу данных
         </button>
         <button onClick={handleGenerate} className="btn btn-primary">
           <Download size={18} /> Сгенерировать test.html
