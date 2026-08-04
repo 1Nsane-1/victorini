@@ -8,7 +8,7 @@ const PDFDocument = require("pdfkit");
 const { Document, Packer, Paragraph, TextRun } = require("docx");
 require("dotenv").config();
 const mongoose = require("mongoose");
-
+const Survey = require("./models/Survey");
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ База данных MongoDB успешно подключена!"))
@@ -161,7 +161,41 @@ app.use(express.static(frontendBuildPath));
 app.get(/^(?!\/api).*/, (req, res) => {
   res.sendFile(path.join(frontendBuildPath, "index.html"));
 });
+// Маршрут 1: Сохранение нового глобального опроса в БД
+app.post("/api/surveys", async (req, res) => {
+  try {
+    const { title, description, blocks } = req.body;
 
+    // Создаем новый документ на основе нашей схемы
+    const newSurvey = new Survey({
+      title,
+      description,
+      blocks,
+    });
+
+    // Сохраняем документ в MongoDB
+    const savedSurvey = await newSurvey.save();
+
+    // Отвечаем фронтенду успехом и отдаем данные (включая сгенерированный базой ID)
+    res.status(201).json(savedSurvey);
+  } catch (error) {
+    console.error("Ошибка сохранения опроса:", error);
+    res.status(500).json({ error: "Не удалось сохранить опрос" });
+  }
+});
+
+// Маршрут 2: Получение опроса по ID (для глобального доступа)
+app.get("/api/surveys/:id", async (req, res) => {
+  try {
+    const survey = await Survey.findById(req.params.id);
+    if (!survey) {
+      return res.status(404).json({ error: "Опрос не найден" });
+    }
+    res.status(200).json(survey);
+  } catch (error) {
+    res.status(500).json({ error: "Ошибка при поиске опроса" });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n=========================================`);
   console.log(`API Сервер запущен: http://localhost:${PORT}`);
