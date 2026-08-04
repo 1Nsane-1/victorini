@@ -87,10 +87,10 @@ export default function Constructor() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
   const saveSurveyToServer = async () => {
     if (questions.length === 0) return alert("Добавьте хотя бы один вопрос");
 
-    // Такая же валидация, как при генерации HTML
     for (let i = 0; i < questions.length; i++) {
       if (!questions[i].text)
         return alert(`Вопрос ${i + 1} не содержит текста`);
@@ -98,33 +98,31 @@ export default function Constructor() {
         return alert(`Вопрос ${i + 1} не имеет правильного ответа`);
     }
 
-    // Твой бэкенд ждет массив "blocks", поэтому превращаем вопросы в блоки
     const blocks = questions.map((q) => ({
       type: "question",
       content: q,
     }));
 
-    // Собираем всё в нужный для бэкенда формат
     const surveyData = {
       title: settings.title,
-      // Сохраняем твои настройки проходного балла прямо в описание (в формате JSON),
-      // чтобы потом легко их достать при прохождении теста
       description: JSON.stringify(settings),
       blocks: blocks,
     };
 
+    // ВНИМАНИЕ НА СТРОКУ НИЖЕ:
+    // Если твой бэкенд на Render имеет другую ссылку, замени 'https://victorini-api.onrender.com' на свою!
+    const API_URL =
+      import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
+
     try {
-      // Отправляем на твой бэкенд на Render
-      const response = await fetch(
-        "https://victorini.onrender.com/api/surveys",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(surveyData),
+      // Отправляем данные на бэкенд
+      const response = await fetch(`${API_URL}/api/surveys`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify(surveyData),
+      });
 
       const data = await response.json();
 
@@ -135,7 +133,7 @@ export default function Constructor() {
       }
     } catch (error) {
       console.error(error);
-      alert("Ошибка соединения с сервером. Бэкенд запущен?");
+      alert("Ошибка соединения с сервером. Проверь ссылку на Render.");
     }
   };
   const totalPossible =
