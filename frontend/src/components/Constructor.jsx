@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { generateTestHTML } from "../testTemplate";
 import {
   Plus,
@@ -21,33 +21,69 @@ export default function Constructor() {
   });
   const [questions, setQuestions] = useState([]);
 
-  // --- НОВЫЕ СОСТОЯНИЯ ДЛЯ ПАПОК И ССЫЛКИ ---
   const [savedQuizId, setSavedQuizId] = useState(null);
-  const [folders, setFolders] = useState([
-    "Общая",
-    "Домашние задания",
-    "Контрольные",
-  ]);
-  const [selectedFolder, setSelectedFolder] = useState("Общая");
-  const [newFolderName, setNewFolderName] = useState("");
   const [isCopied, setIsCopied] = useState(false);
 
-  // --- ЛОГИКА СОЗДАНИЯ ПАПКИ ---
-  const handleCreateFolder = () => {
+  // --- ВОТ ОТСЮДА НАЧИНАЕТСЯ НОВАЯ ЛОГИКА ПАПОК ---
+
+  // Папки теперь изначально пустые, мы загрузим их с сервера
+  const [folders, setFolders] = useState([]);
+  const [selectedFolder, setSelectedFolder] = useState("");
+  const [newFolderName, setNewFolderName] = useState("");
+
+  // Запрашиваем реальные папки с твоего бэкенда при открытии страницы
+  useEffect(() => {
+    const fetchFolders = async () => {
+      try {
+        const API_URL =
+          import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
+        const res = await fetch(`${API_URL}/api/folders`);
+        const data = await res.json();
+
+        if (Array.isArray(data) && data.length > 0) {
+          setFolders(data);
+          setSelectedFolder(data[0]); // Автоматически выбираем первую папку
+        }
+      } catch (err) {
+        console.error("Ошибка загрузки папок:", err);
+      }
+    };
+    fetchFolders();
+  }, []);
+
+  // Функция создания папки, которая отправляет запрос на сервер
+  const handleCreateFolder = async () => {
     if (folders.length >= 15) {
       return alert("Достигнут лимит: максимум 15 папок!");
     }
     const trimmed = newFolderName.trim();
     if (!trimmed) return alert("Введите название папки");
-    if (folders.includes(trimmed)) {
-      return alert("Такая папка уже существует!");
+
+    try {
+      const API_URL =
+        import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
+      const res = await fetch(`${API_URL}/api/folders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderName: trimmed }),
+      });
+
+      if (res.ok) {
+        setFolders([...folders, trimmed]);
+        setSelectedFolder(trimmed);
+        setNewFolderName("");
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Ошибка создания папки");
+      }
+    } catch (err) {
+      alert("Не удалось создать папку на сервере");
     }
-    setFolders([...folders, trimmed]);
-    setSelectedFolder(trimmed);
-    setNewFolderName("");
   };
 
-  // --- ЛОГИКА КОПИРОВАНИЯ ССЫЛКИ ---
+  // --- КОНЕЦ НОВОЙ ЛОГИКИ ПАПОК ---
+
+  // Ниже идет твой старый код: handleCopyLink, addQuestion, updateQuestion и так далее...
   const handleCopyLink = () => {
     if (!savedQuizId) return;
     const link = `https://victorini.vercel.app/quiz/${savedQuizId}`;

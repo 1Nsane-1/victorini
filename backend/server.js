@@ -224,6 +224,97 @@ app.get("/api/submissions", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+// --- 1. ЭНДПОИНТ: Получение списка всех реальных папок с сайта ---
+app.get("/api/folders", (req, res) => {
+  const uploadsDir = path.join(__dirname, "uploads");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  // Читаем все подпапки из директории uploads
+  const folders = fs
+    .readdirSync(uploadsDir, { withFileTypes: true })
+    .filter((dirent) => dirent.isDirectory())
+    .map((dirent) => dirent.name);
+
+  // Если папок нет вообще, создаем дефолтную папку "1"
+  if (folders.length === 0) {
+    fs.mkdirSync(path.join(uploadsDir, "1"), { recursive: true });
+    return res.json(["1"]);
+  }
+
+  res.json(folders);
+});
+
+// --- 2. ЭНДПОИНТ: Создание новой папки на сайте ---
+app.post("/api/folders", (req, res) => {
+  const { folderName } = req.body;
+  if (!folderName)
+    return res.status(400).json({ error: "Имя папки не указано" });
+
+  const uploadsDir = path.join(__dirname, "uploads");
+  const folders = fs
+    .readdirSync(uploadsDir, { withFileTypes: true })
+    .filter((dirent) => dirent.isDirectory());
+
+  if (folders.length >= 15) {
+    return res
+      .status(400)
+      .json({ error: "Достигнут лимит: максимум 15 папок!" });
+  }
+
+  const newFolderPath = path.join(uploadsDir, folderName);
+  if (!fs.existsSync(newFolderPath)) {
+    fs.mkdirSync(newFolderPath, { recursive: true });
+  }
+
+  res.json({ message: "Папка успешно создана", folderName });
+});
+
+// --- 3. ЭНДПОИНТ: Сохранение ответов ученика (в MongoDB + в .json файл папки) ---
+app.post("/api/submissions", async (req, res) => {
+  try {
+    const { folder, studentName, quizTitle, score, maxScore, passed } =
+      req.body;
+    const targetFolder = folder || "1";
+
+    // 1. Сохраняем в MongoDB
+    const submission = new Submission(req.body);
+    await submission.save();
+
+    // 2. Сохраняем физический .json файл в папку на сайте (для Анализатора)
+    const folderPath = path.join(__dirname, "uploads", targetFolder);
+    if (!fs.existsSync(folderPath)) {
+      fs.mkdirSync(folderPath, { recursive: true });
+    }
+
+    const safeName = studentName.replace(/[^a-zA-Z0-9а-яА-ЯёЁ]/g, "_");
+    const fileName = `result_${safeName}_${Date.now()}.json`;
+
+    // Формат файла, который ждет ваш Анализатор
+    const jsonResult = {
+      fio: studentName,
+      quizTitle: quizTitle,
+      score: score,
+      maxScore: maxScore,
+      passed: passed,
+      date: new Date().toISOString(),
+    };
+
+    fs.writeFileSync(
+      path.join(folderPath, fileName),
+      JSON.stringify(jsonResult, null, 2),
+      "utf8",
+    );
+
+    res
+      .status(201)
+      .json({ message: "Результат сохранен и в БД, и в папку сайта!" });
+  } catch (error) {
+    console.error("Ошибка сохранения результата:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n=========================================`);
   console.log(`API Сервер запущен: http://localhost:${PORT}`);
