@@ -1,10 +1,19 @@
 import React, { useState } from "react";
 import Constructor from "./components/Constructor";
 import Analyzer from "./components/Analyzer";
+import QuizPlayer from "./components/QuizPlayer"; // Импортируем плеер
 import { LayoutDashboard, FileSpreadsheet, PenTool } from "lucide-react";
 import "./App.css";
 
 function App() {
+  // --- ПРОВЕРКА ССЫЛКИ ДЛЯ ШЕРИНГА ---
+  const path = window.location.pathname;
+  if (path.startsWith("/quiz/")) {
+    const quizId = path.split("/quiz/")[1];
+    return <QuizPlayer quizId={quizId} />;
+  }
+  // ------------------------------------
+
   const [activeTab, setActiveTab] = useState("constructor");
 
   return (
