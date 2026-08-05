@@ -48,7 +48,6 @@ export default function Analyzer() {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        // 1. Стягиваем папки
         const resFolders = await fetch(`${API_URL}/api/folders`);
         if (resFolders.ok) {
           const dataFolders = await resFolders.json();
@@ -58,11 +57,22 @@ export default function Analyzer() {
           }
         }
 
-        // 2. Стягиваем результаты (ответы)
         const resSubmissions = await fetch(`${API_URL}/api/submissions`);
         if (resSubmissions.ok) {
           const dataSubmissions = await resSubmissions.json();
-          setResults(dataSubmissions);
+
+          // НОРМАЛИЗАЦИЯ ДАННЫХ
+          const normalized = dataSubmissions.map((r) => ({
+            ...r,
+            // Если есть fio — берем его, иначе берем studentName, иначе ставим заглушку
+            fio: r.fio || r.studentName || "Без имени",
+            // Если деталей нет в БД, подставляем пустой массив, чтобы избежать белого экрана
+            details: r.details || [],
+            score: r.score || 0,
+            maxScore: r.maxScore || 0,
+          }));
+
+          setResults(normalized);
         }
       } catch (err) {
         console.error("Ошибка загрузки данных с сервера:", err);
@@ -189,55 +199,59 @@ export default function Analyzer() {
     }
   };
 
-  // Загрузка файлов
-  const handleFileUpload = async (e) => {
+  // Загрузка файлов и отправка их в БД
+  const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
 
-    // Проверяем лимит текущей папки
     if (folderResults.length + files.length > MAX_RESULTS_PER_FOLDER) {
-      alert(
-        `Ошибка! В одной папке разрешено хранить не более ${MAX_RESULTS_PER_FOLDER} результатов. Сейчас в ней: ${folderResults.length}`,
-      );
+      alert(`Ошибка! Превышен лимит (${MAX_RESULTS_PER_FOLDER}) в папке.`);
       e.target.value = "";
       return;
     }
 
-    // Чтение для UI
     files.forEach((file) => {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         try {
           const json = JSON.parse(event.target.result);
-          setResults((prev) => [
-            ...prev,
-            { ...json, _id: makeId(), folder: currentFolder },
-          ]);
+
+          // Формируем объект для базы данных
+          const submissionData = {
+            ...json,
+            folder: currentFolder, // Принудительно кладем в текущую открытую папку
+            fio: json.fio || json.studentName || "Без имени",
+            details: json.details || [],
+          };
+
+          // 1. Отправляем в базу данных
+          const response = await fetch(`${API_URL}/api/submissions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(submissionData),
+          });
+
+          if (response.ok) {
+            const savedData = await response.json();
+            // 2. Добавляем на экран
+            setResults((prev) => [
+              ...prev,
+              { ...submissionData, _id: savedData._id || makeId() },
+            ]);
+            setNotice(`Файл ${file.name} успешно загружен и сохранен!`);
+          } else {
+            console.error("Сервер отказался сохранять файл", file.name);
+          }
         } catch (error) {
-          console.error("Ошибка чтения локального файла", file.name);
+          console.error(
+            "Ошибка чтения или отправки локального файла",
+            file.name,
+            error,
+          );
         }
       };
       reader.readAsText(file);
     });
-
-    // Отправка на бэкенд
-    const formData = new FormData();
-    files.forEach((f) => formData.append("files", f));
-    formData.append("folder", currentFolder);
-
-    try {
-      const response = await fetch(`${API_URL}/api/upload`, {
-        method: "POST",
-        body: formData,
-      });
-      if (response.ok) {
-        setNotice(
-          `Файлы (${files.length} шт.) успешно загружены в папку: ${currentFolder}`,
-        );
-      }
-    } catch (err) {
-      console.error("Ошибка сохранения на сервере", err);
-    }
 
     e.target.value = "";
   };
@@ -1027,7 +1041,7 @@ export default function Analyzer() {
                     gap: "12px",
                   }}
                 >
-                  {selectedStudent.details.map((det, idx) => (
+                  {selectedStudent.details?.map((det, idx) => (
                     <div
                       key={idx}
                       style={{

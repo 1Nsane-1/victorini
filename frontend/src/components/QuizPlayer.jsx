@@ -76,6 +76,9 @@ export default function QuizPlayer({ quizId }) {
     let maxPossibleScore = 0;
     const pointsPerQ = Number(settings.pointsPerQuestion) || 1;
 
+    // Массив для хранения подробной статистики по каждому вопросу
+    const details = [];
+
     // Проверяем ответы
     quiz.blocks.forEach((block, qIndex) => {
       if (block.type === "question") {
@@ -91,6 +94,14 @@ export default function QuizPlayer({ quizId }) {
         if (isCorrect) {
           totalScore += pointsPerQ;
         }
+
+        // Сохраняем детали ответа для Анализатора
+        details.push({
+          question: block.content.text || `Вопрос ${qIndex + 1}`,
+          isCorrect: isCorrect,
+          correctAnswers: correct,
+          userAnswers: selected,
+        });
       }
     });
 
@@ -105,14 +116,17 @@ export default function QuizPlayer({ quizId }) {
       passed = totalScore >= passScore;
     }
 
+    // Собираем финальный объект для отправки
     const resultData = {
       quizId,
       quizTitle: quiz.title,
-      studentName,
+      fio: studentName, // Анализатор ожидает поле fio
+      studentName: studentName, // Оставляем для совместимости
       score: totalScore,
       maxScore: maxPossibleScore,
       passed,
-      folder: quiz.folder || "Общая",
+      folder: quiz.folder || "Общая", // Указываем папку
+      details: details, // Передаем собранные детали ответов!
       submittedAt: new Date(),
     };
 
