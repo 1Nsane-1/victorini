@@ -34,16 +34,8 @@ export default function Analyzer() {
   const [folders, setFolders] = useState([]);
   const [currentFolder, setCurrentFolder] = useState("");
 
-  // Все результаты
-  const [results, setResults] = useState(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_RESULTS_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return parsed.map((r) => (r._id ? r : { ...r, _id: makeId() }));
-    } catch {
-      return [];
-    }
-  });
+  // Все результаты (теперь изначально пустые, ждем данные с сервера)
+  const [results, setResults] = useState([]);
 
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState("");
@@ -52,27 +44,35 @@ export default function Analyzer() {
   const [sortDir, setSortDir] = useState("desc");
   const [notice, setNotice] = useState("");
 
-  // Загружаем папки с сервера при старте
+  // Загружаем папки и результаты с сервера при старте
   useEffect(() => {
-    const fetchFolders = async () => {
+    const fetchInitialData = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/folders`);
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setFolders(data);
-          setCurrentFolder(data[0]);
+        // 1. Стягиваем папки
+        const resFolders = await fetch(`${API_URL}/api/folders`);
+        if (resFolders.ok) {
+          const dataFolders = await resFolders.json();
+          if (Array.isArray(dataFolders) && dataFolders.length > 0) {
+            setFolders(dataFolders);
+            setCurrentFolder(dataFolders[0]);
+          }
+        }
+
+        // 2. Стягиваем результаты (ответы)
+        const resSubmissions = await fetch(`${API_URL}/api/submissions`);
+        if (resSubmissions.ok) {
+          const dataSubmissions = await resSubmissions.json();
+          setResults(dataSubmissions);
         }
       } catch (err) {
-        console.error("Ошибка загрузки папок:", err);
+        console.error("Ошибка загрузки данных с сервера:", err);
       }
     };
-    fetchFolders();
+
+    fetchInitialData();
   }, [API_URL]);
 
-  // Сохранение локальных результатов
-  useEffect(() => {
-    localStorage.setItem(STORAGE_RESULTS_KEY, JSON.stringify(results));
-  }, [results]);
+  // (useEffect с сохранением в localStorage для results должен быть удален!)
 
   useEffect(() => {
     if (!notice) return;
