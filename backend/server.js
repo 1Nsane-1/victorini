@@ -270,7 +270,53 @@ app.post("/api/folders", (req, res) => {
 
   res.json({ message: "Папка успешно создана", folderName });
 });
+// --- 3. ЭНДПОИНТ: Удаление папки на сайте ---
+app.delete("/api/folders/:name", async (req, res) => {
+  const folderName = req.params.name;
+  const targetPath = path.join(__dirname, "uploads", folderName);
 
+  // Удаляем физическую папку
+  if (fs.existsSync(targetPath)) {
+    fs.rmSync(targetPath, { recursive: true, force: true });
+  }
+
+  // Удаляем результаты из базы данных, привязанные к этой папке
+  try {
+    await Submission.deleteMany({ folder: folderName });
+    res.json({ message: "Папка и все её результаты удалены" });
+  } catch (error) {
+    res.status(500).json({ error: "Ошибка при удалении из БД" });
+  }
+});
+
+// --- 4. ЭНДПОИНТ: Переименование папки на сайте ---
+app.put("/api/folders/:oldName", async (req, res) => {
+  const oldName = req.params.oldName;
+  const { newName } = req.body;
+  if (!newName) return res.status(400).json({ error: "Новое имя не указано" });
+
+  const uploadsDir = path.join(__dirname, "uploads");
+  const oldPath = path.join(uploadsDir, oldName);
+  const newPath = path.join(uploadsDir, newName);
+
+  // Переименовываем физическую папку
+  if (fs.existsSync(oldPath)) {
+    fs.renameSync(oldPath, newPath);
+  } else {
+    fs.mkdirSync(newPath, { recursive: true }); // Если не было, создадим новую
+  }
+
+  // Обновляем имя папки во всех результатах в базе данных
+  try {
+    await Submission.updateMany(
+      { folder: oldName },
+      { $set: { folder: newName } },
+    );
+    res.json({ message: "Папка успешно переименована", newName });
+  } catch (error) {
+    res.status(500).json({ error: "Ошибка при обновлении БД" });
+  }
+});
 // --- 3. ЭНДПОИНТ: Сохранение ответов ученика (в MongoDB + в .json файл папки) ---
 app.post("/api/submissions", async (req, res) => {
   try {

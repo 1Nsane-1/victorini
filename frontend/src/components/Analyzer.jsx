@@ -18,7 +18,6 @@ import {
 const letterFor = (i) => String.fromCharCode(65 + i);
 
 const STORAGE_RESULTS_KEY = "quiz-builder:analyzer-results-v2";
-const STORAGE_FOLDERS_KEY = "quiz-builder:analyzer-folders";
 const MAX_FOLDERS = 15;
 const MAX_RESULTS_PER_FOLDER = 100;
 
@@ -28,19 +27,14 @@ const makeId = () =>
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export default function Analyzer() {
-  // Список папок
-  const [folders, setFolders] = useState(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_FOLDERS_KEY);
-      return raw ? JSON.parse(raw) : ["ИСП33", "Другие", "Архив"];
-    } catch {
-      return ["ИСП33", "Другие", "Архив"];
-    }
-  });
+  const API_URL =
+    import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
 
-  const [currentFolder, setCurrentFolder] = useState(folders[0] || "ИСП33");
+  // Список папок (грузится с сервера)
+  const [folders, setFolders] = useState([]);
+  const [currentFolder, setCurrentFolder] = useState("");
 
-  // Все результаты. Каждый объект теперь имеет свойство folder
+  // Все результаты
   const [results, setResults] = useState(() => {
     try {
       const raw = localStorage.getItem(STORAGE_RESULTS_KEY);
@@ -58,11 +52,24 @@ export default function Analyzer() {
   const [sortDir, setSortDir] = useState("desc");
   const [notice, setNotice] = useState("");
 
-  // Сохранение данных в LocalStorage
+  // Загружаем папки с сервера при старте
   useEffect(() => {
-    localStorage.setItem(STORAGE_FOLDERS_KEY, JSON.stringify(folders));
-  }, [folders]);
+    const fetchFolders = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/folders`);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setFolders(data);
+          setCurrentFolder(data[0]);
+        }
+      } catch (err) {
+        console.error("Ошибка загрузки папок:", err);
+      }
+    };
+    fetchFolders();
+  }, [API_URL]);
 
+  // Сохранение локальных результатов
   useEffect(() => {
     localStorage.setItem(STORAGE_RESULTS_KEY, JSON.stringify(results));
   }, [results]);
@@ -81,8 +88,8 @@ export default function Analyzer() {
   const selectedStudent =
     folderResults.find((r) => r._id === selectedId) || null;
 
-  // Управление папками
-  const handleAddFolder = () => {
+  // Управление папками через сервер
+  const handleAddFolder = async () => {
     if (folders.length >= MAX_FOLDERS) {
       alert(`Нельзя создать более ${MAX_FOLDERS} папок.`);
       return;
@@ -94,11 +101,24 @@ export default function Analyzer() {
       alert("Папка с таким названием уже существует.");
       return;
     }
-    setFolders([...folders, trimmed]);
-    setCurrentFolder(trimmed);
+
+    try {
+      const res = await fetch(`${API_URL}/api/folders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderName: trimmed }),
+      });
+      if (res.ok) {
+        setFolders([...folders, trimmed]);
+        setCurrentFolder(trimmed);
+        setNotice(`Папка "${trimmed}" создана`);
+      }
+    } catch (err) {
+      alert("Ошибка соединения с сервером");
+    }
   };
 
-  const handleRenameFolder = () => {
+  const handleRenameFolder = async () => {
     const newName = prompt(
       `Переименовать папку "${currentFolder}" в:`,
       currentFolder,
@@ -111,18 +131,32 @@ export default function Analyzer() {
       return;
     }
 
-    // Обновляем имя в списке папок и во всех связанных результатах
-    setFolders(folders.map((f) => (f === currentFolder ? trimmed : f)));
-    setResults(
-      results.map((r) =>
-        r.folder === currentFolder ? { ...r, folder: trimmed } : r,
-      ),
-    );
-    setCurrentFolder(trimmed);
-    setNotice(`Папка переименована в "${trimmed}"`);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/folders/${encodeURIComponent(currentFolder)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newName: trimmed }),
+        },
+      );
+
+      if (res.ok) {
+        setFolders(folders.map((f) => (f === currentFolder ? trimmed : f)));
+        setResults(
+          results.map((r) =>
+            r.folder === currentFolder ? { ...r, folder: trimmed } : r,
+          ),
+        );
+        setCurrentFolder(trimmed);
+        setNotice(`Папка переименована в "${trimmed}"`);
+      }
+    } catch (err) {
+      alert("Ошибка при переименовании папки");
+    }
   };
 
-  const handleDeleteFolder = () => {
+  const handleDeleteFolder = async () => {
     if (folders.length <= 1) {
       alert("Должна оставаться как минимум одна папка.");
       return;
@@ -134,12 +168,25 @@ export default function Analyzer() {
     )
       return;
 
-    const remainingFolders = folders.filter((f) => f !== currentFolder);
-    setResults(results.filter((r) => r.folder !== currentFolder));
-    setFolders(remainingFolders);
-    setCurrentFolder(remainingFolders[0]);
-    setSelectedId(null);
-    setNotice("Папка успешно удалена");
+    try {
+      const res = await fetch(
+        `${API_URL}/api/folders/${encodeURIComponent(currentFolder)}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (res.ok) {
+        const remainingFolders = folders.filter((f) => f !== currentFolder);
+        setResults(results.filter((r) => r.folder !== currentFolder));
+        setFolders(remainingFolders);
+        setCurrentFolder(remainingFolders[0]);
+        setSelectedId(null);
+        setNotice("Папка успешно удалена");
+      }
+    } catch (err) {
+      alert("Ошибка при удалении папки");
+    }
   };
 
   // Загрузка файлов
@@ -179,7 +226,7 @@ export default function Analyzer() {
     formData.append("folder", currentFolder);
 
     try {
-      const response = await fetch("/api/upload", {
+      const response = await fetch(`${API_URL}/api/upload`, {
         method: "POST",
         body: formData,
       });
@@ -199,8 +246,6 @@ export default function Analyzer() {
   const handleExport = async (format) => {
     if (!filteredResults.length) return;
     setNotice(`Подготовка ${format.toUpperCase()}...`);
-
-    const API_URL = import.meta.env.VITE_API_URL || "";
 
     try {
       const res = await fetch(`${API_URL}/api/export/${format}`, {
@@ -226,7 +271,7 @@ export default function Analyzer() {
 
   // Поштучное удаление студента
   const handleDeleteSingle = (id, e) => {
-    e.stopPropagation(); // Чтобы не срабатывал клик по строке (выбор студента)
+    e.stopPropagation();
     if (!window.confirm("Удалить этот результат?")) return;
 
     setResults(results.filter((r) => r._id !== id));
@@ -273,7 +318,7 @@ export default function Analyzer() {
     [folderResults, totalStudents],
   );
 
-  // Фильтрация и сортировка таблицы (внутри текущей папки)
+  // Фильтрация и сортировка таблицы
   const filteredResults = useMemo(() => {
     return folderResults
       .filter((r) => (r.fio || "").toLowerCase().includes(search.toLowerCase()))
@@ -527,7 +572,7 @@ export default function Analyzer() {
             />
           </div>
 
-          {/* Нижняя часть: Таблица результатов и Панель Деталей */}
+          {/* Таблица и Панель Деталей */}
           <div
             style={{
               display: "flex",
@@ -763,7 +808,6 @@ export default function Analyzer() {
                             {res.passed ? "Сдал" : "Не сдал"}
                           </span>
                         </td>
-                        {/* Кнопка удаления отдельной записи */}
                         <td
                           style={{ padding: "16px 20px", textAlign: "center" }}
                         >
@@ -818,7 +862,6 @@ export default function Analyzer() {
                 <div
                   style={{
                     display: "flex",
-                    justifyBox: "space-between",
                     justifyContent: "space-between",
                     alignItems: "center",
                     marginBottom: "20px",
