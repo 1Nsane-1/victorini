@@ -1,6 +1,14 @@
 import React, { useState } from "react";
 import { generateTestHTML } from "../testTemplate";
-import { Plus, Trash2, Download, CloudUpload } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Download,
+  CloudUpload,
+  Copy,
+  Check,
+  FolderPlus,
+} from "lucide-react";
 
 const letterFor = (i) => String.fromCharCode(65 + i);
 
@@ -9,9 +17,44 @@ export default function Constructor() {
     title: "Новый тест",
     pointsPerQuestion: 1,
     passScore: 50,
-    passMode: "absolute", // Добавили режим по умолчанию: 'absolute' (баллы) или 'percentage' (проценты)
+    passMode: "absolute",
   });
   const [questions, setQuestions] = useState([]);
+
+  // --- НОВЫЕ СОСТОЯНИЯ ДЛЯ ПАПОК И ССЫЛКИ ---
+  const [savedQuizId, setSavedQuizId] = useState(null);
+  const [folders, setFolders] = useState([
+    "Общая",
+    "Домашние задания",
+    "Контрольные",
+  ]);
+  const [selectedFolder, setSelectedFolder] = useState("Общая");
+  const [newFolderName, setNewFolderName] = useState("");
+  const [isCopied, setIsCopied] = useState(false);
+
+  // --- ЛОГИКА СОЗДАНИЯ ПАПКИ ---
+  const handleCreateFolder = () => {
+    if (folders.length >= 15) {
+      return alert("Достигнут лимит: максимум 15 папок!");
+    }
+    const trimmed = newFolderName.trim();
+    if (!trimmed) return alert("Введите название папки");
+    if (folders.includes(trimmed)) {
+      return alert("Такая папка уже существует!");
+    }
+    setFolders([...folders, trimmed]);
+    setSelectedFolder(trimmed);
+    setNewFolderName("");
+  };
+
+  // --- ЛОГИКА КОПИРОВАНИЯ ССЫЛКИ ---
+  const handleCopyLink = () => {
+    if (!savedQuizId) return;
+    const link = `https://victorini.vercel.app/quiz/${savedQuizId}`;
+    navigator.clipboard.writeText(link);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
 
   const addQuestion = () => {
     setQuestions([
@@ -88,6 +131,7 @@ export default function Constructor() {
     URL.revokeObjectURL(url);
   };
 
+  // --- ОБНОВЛЕННАЯ ФУНКЦИЯ СОХРАНЕНИЯ В БД ---
   const saveSurveyToServer = async () => {
     if (questions.length === 0) return alert("Добавьте хотя бы один вопрос");
 
@@ -103,19 +147,18 @@ export default function Constructor() {
       content: q,
     }));
 
+    // Добавляем информацию о папке в объект для бэкенда
     const surveyData = {
       title: settings.title,
-      description: JSON.stringify(settings),
+      description: JSON.stringify({ ...settings, folder: selectedFolder }),
       blocks: blocks,
+      folder: selectedFolder,
     };
 
-    // ВНИМАНИЕ НА СТРОКУ НИЖЕ:
-    // Если твой бэкенд на Render имеет другую ссылку, замени 'https://victorini-api.onrender.com' на свою!
     const API_URL =
       import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
 
     try {
-      // Отправляем данные на бэкенд
       const response = await fetch(`${API_URL}/api/surveys`, {
         method: "POST",
         headers: {
@@ -127,7 +170,8 @@ export default function Constructor() {
       const data = await response.json();
 
       if (response.ok) {
-        alert(`УРА! Тест успешно сохранен в базе данных!\nЕго ID: ${data._id}`);
+        // Сохраняем ID, чтобы показать кликабельную ссылку на экране
+        setSavedQuizId(data._id);
       } else {
         alert("Ошибка при сохранении: " + (data.error || "Неизвестная ошибка"));
       }
@@ -136,6 +180,7 @@ export default function Constructor() {
       alert("Ошибка соединения с сервером. Проверь ссылку на Render.");
     }
   };
+
   const totalPossible =
     questions.length * (Number(settings.pointsPerQuestion) || 0);
 
@@ -159,6 +204,83 @@ export default function Constructor() {
             }
             className="input-field title-input"
           />
+        </div>
+
+        {/* БЛОК ВЫБОРА И СОЗДАНИЯ ПАПКИ */}
+        <div
+          className="form-group"
+          style={{
+            background: "#f8fafc",
+            padding: "12px",
+            borderRadius: "8px",
+            border: "1px solid #e2e8f0",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "8px",
+            }}
+          >
+            <label
+              className="form-label"
+              style={{ marginBottom: 0, fontWeight: "600" }}
+            >
+              📁 Папка для ответов учеников
+            </label>
+            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+              Папок: {folders.length} / 15
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              flexWrap: "wrap",
+              marginBottom: "8px",
+            }}
+          >
+            <select
+              value={selectedFolder}
+              onChange={(e) => setSelectedFolder(e.target.value)}
+              className="input-field"
+              style={{ flex: "1", minWidth: "180px" }}
+            >
+              {folders.map((folder, index) => (
+                <option key={index} value={folder}>
+                  {folder}
+                </option>
+              ))}
+            </select>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "6px",
+                flex: "1",
+                minWidth: "220px",
+              }}
+            >
+              <input
+                type="text"
+                placeholder="Новая папка..."
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                className="input-field"
+              />
+              <button
+                onClick={handleCreateFolder}
+                className="btn btn-outline"
+                type="button"
+                style={{ whiteSpace: "nowrap" }}
+              >
+                <FolderPlus size={16} /> Создать
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="grid-2">
@@ -188,7 +310,6 @@ export default function Constructor() {
                 Проходной порог
               </label>
 
-              {/* Переключатель режимов */}
               <div
                 style={{
                   display: "flex",
@@ -390,6 +511,68 @@ export default function Constructor() {
           <Download size={18} /> Сгенерировать test.html
         </button>
       </div>
+
+      {/* КАРТОЧКА С ГОТОВОЙ ССЫЛКОЙ ДЛЯ ШЕРИНГА */}
+      {savedQuizId && (
+        <div
+          className="card"
+          style={{
+            marginTop: "24px",
+            background: "#ecfdf5",
+            borderColor: "#10b981",
+            borderWidth: "2px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              marginBottom: "8px",
+            }}
+          >
+            <span style={{ fontSize: "20px" }}>🎉</span>
+            <h3 style={{ margin: 0, color: "#065f46" }}>
+              Тест успешно сохранен!
+            </h3>
+          </div>
+          <p
+            style={{ margin: "0 0 12px 0", color: "#047857", fontSize: "14px" }}
+          >
+            Ответы учеников будут сохраняться в папку:{" "}
+            <strong>«{selectedFolder}»</strong>
+          </p>
+
+          <div style={{ display: "flex", gap: "10px" }}>
+            <input
+              type="text"
+              readOnly
+              value={`https://victorini.vercel.app/quiz/${savedQuizId}`}
+              className="input-field"
+              style={{
+                background: "white",
+                fontWeight: "600",
+                color: "#0f766e",
+              }}
+            />
+            <button
+              onClick={handleCopyLink}
+              className="btn btn-primary"
+              style={{
+                background: isCopied ? "#059669" : "#10b981",
+                borderColor: "#10b981",
+                whiteSpace: "nowrap",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              {isCopied ? <Check size={18} /> : <Copy size={18} />}
+              {isCopied ? "Скопировано!" : "Скопировать ссылку"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
