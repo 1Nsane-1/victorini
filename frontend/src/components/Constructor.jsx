@@ -26,12 +26,11 @@ export default function Constructor() {
 
   // --- ВОТ ОТСЮДА НАЧИНАЕТСЯ НОВАЯ ЛОГИКА ПАПОК ---
 
-  // Папки теперь изначально пустые, мы загрузим их с сервера
+  // --- ЛОГИКА ПАПОК (ТОЛЬКО ЧТЕНИЕ) ---
   const [folders, setFolders] = useState([]);
   const [selectedFolder, setSelectedFolder] = useState("");
-  const [newFolderName, setNewFolderName] = useState("");
 
-  // Запрашиваем реальные папки с твоего бэкенда при открытии страницы
+  // Загружаем актуальные папки с сервера (созданные через Анализатор)
   useEffect(() => {
     const fetchFolders = async () => {
       try {
@@ -42,7 +41,11 @@ export default function Constructor() {
 
         if (Array.isArray(data) && data.length > 0) {
           setFolders(data);
-          setSelectedFolder(data[0]); // Автоматически выбираем первую папку
+          setSelectedFolder(data[0]); // По умолчанию выбираем первую папку (например, "1")
+        } else {
+          // Если вообще ничего нет, ставим 1 как fallback
+          setFolders(["1"]);
+          setSelectedFolder("1");
         }
       } catch (err) {
         console.error("Ошибка загрузки папок:", err);
@@ -50,38 +53,7 @@ export default function Constructor() {
     };
     fetchFolders();
   }, []);
-
-  // Функция создания папки, которая отправляет запрос на сервер
-  const handleCreateFolder = async () => {
-    if (folders.length >= 15) {
-      return alert("Достигнут лимит: максимум 15 папок!");
-    }
-    const trimmed = newFolderName.trim();
-    if (!trimmed) return alert("Введите название папки");
-
-    try {
-      const API_URL =
-        import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
-      const res = await fetch(`${API_URL}/api/folders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderName: trimmed }),
-      });
-
-      if (res.ok) {
-        setFolders([...folders, trimmed]);
-        setSelectedFolder(trimmed);
-        setNewFolderName("");
-      } else {
-        const errData = await res.json();
-        alert(errData.error || "Ошибка создания папки");
-      }
-    } catch (err) {
-      alert("Не удалось создать папку на сервере");
-    }
-  };
-
-  // --- КОНЕЦ НОВОЙ ЛОГИКИ ПАПОК ---
+  // --- КОНЕЦ ЛОГИКИ ПАПОК ---
 
   // Ниже идет твой старый код: handleCopyLink, addQuestion, updateQuestion и так далее...
   const handleCopyLink = () => {
@@ -242,7 +214,7 @@ export default function Constructor() {
           />
         </div>
 
-        {/* БЛОК ВЫБОРА И СОЗДАНИЯ ПАПКИ */}
+        {/* БЛОК ВЫБОРА ПАПКИ (ТОЛЬКО ЧТЕНИЕ ИЗ АНАЛИЗАТОРА) */}
         <div
           className="form-group"
           style={{
@@ -252,71 +224,43 @@ export default function Constructor() {
             border: "1px solid #e2e8f0",
           }}
         >
-          <div
+          <label
+            className="form-label"
+            style={{ fontWeight: "600", display: "block", marginBottom: "8px" }}
+          >
+            📁 Папка для ответов учеников (из Анализатора)
+          </label>
+
+          <select
+            value={selectedFolder}
+            onChange={(e) => setSelectedFolder(e.target.value)}
+            className="input-field"
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "8px",
+              width: "100%",
+              padding: "10px",
+              borderRadius: "8px",
+              border: "1px solid #ccc",
+              cursor: "pointer",
             }}
           >
-            <label
-              className="form-label"
-              style={{ marginBottom: 0, fontWeight: "600" }}
-            >
-              📁 Папка для ответов учеников
-            </label>
-            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-              Папок: {folders.length} / 15
-            </span>
-          </div>
+            {folders.map((f, i) => (
+              <option key={i} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
 
-          <div
+          <p
             style={{
-              display: "flex",
-              gap: "10px",
-              flexWrap: "wrap",
-              marginBottom: "8px",
+              fontSize: "12px",
+              color: "var(--text-muted)",
+              marginTop: "8px",
+              fontStyle: "italic",
+              marginBottom: 0,
             }}
           >
-            <select
-              value={selectedFolder}
-              onChange={(e) => setSelectedFolder(e.target.value)}
-              className="input-field"
-              style={{ flex: "1", minWidth: "180px" }}
-            >
-              {folders.map((folder, index) => (
-                <option key={index} value={folder}>
-                  {folder}
-                </option>
-              ))}
-            </select>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "6px",
-                flex: "1",
-                minWidth: "220px",
-              }}
-            >
-              <input
-                type="text"
-                placeholder="Новая папка..."
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                className="input-field"
-              />
-              <button
-                onClick={handleCreateFolder}
-                className="btn btn-outline"
-                type="button"
-                style={{ whiteSpace: "nowrap" }}
-              >
-                <FolderPlus size={16} /> Создать
-              </button>
-            </div>
-          </div>
+            * Создавать и удалять папки можно только на вкладке «Анализатор»
+          </p>
         </div>
 
         <div className="grid-2">
