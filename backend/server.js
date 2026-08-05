@@ -9,6 +9,7 @@ const { Document, Packer, Paragraph, TextRun } = require("docx");
 require("dotenv").config();
 const mongoose = require("mongoose");
 const Survey = require("./models/Survey");
+const Submission = require("./models/Submission");
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ База данных MongoDB успешно подключена!"))
@@ -194,6 +195,33 @@ app.get("/api/surveys/:id", async (req, res) => {
     res.status(200).json(survey);
   } catch (error) {
     res.status(500).json({ error: "Ошибка при поиске опроса" });
+  }
+});
+// Маршрут 3: Сохранение результатов прохождения теста учеником
+app.post("/api/submissions", async (req, res) => {
+  try {
+    const submission = new Submission(req.body);
+    await submission.save();
+    res
+      .status(201)
+      .json({ message: "Результат успешно сохранен", id: submission._id });
+  } catch (error) {
+    console.error("Ошибка сохранения результата:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Маршрут 4: Получение результатов по папкам (для твоего Анализатора)
+app.get("/api/submissions", async (req, res) => {
+  try {
+    const { folder } = req.query;
+    // Если папка передана, фильтруем по ней. Если нет - отдаем все.
+    const filter = folder ? { folder } : {};
+    const submissions = await Submission.find(filter).sort({ submittedAt: -1 });
+    res.status(200).json(submissions);
+  } catch (error) {
+    console.error("Ошибка получения результатов:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 app.listen(PORT, () => {

@@ -5,16 +5,20 @@ export default function QuizPlayer({ quizId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const [studentName, setStudentName] = useState("");
+  const [answers, setAnswers] = useState({}); // { questionIndex: [optionIndices] }
+  const [submitted, setSubmitted] = useState(false);
+  const [scoreResult, setScoreResult] = useState(null);
+
   useEffect(() => {
     const fetchQuiz = async () => {
       try {
         const API_URL =
           import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
-        // Делаем GET запрос на твой бэкенд
         const response = await fetch(`${API_URL}/api/surveys/${quizId}`);
 
         if (!response.ok) {
-          throw new Error("Тест не найден или удален");
+          throw new Error("Тест не найден или был удален");
         }
 
         const data = await response.json();
@@ -29,51 +33,286 @@ export default function QuizPlayer({ quizId }) {
     fetchQuiz();
   }, [quizId]);
 
+  // Обработка выбора варианта ответа
+  const handleOptionSelect = (qIndex, oIndex, qType) => {
+    const currentAnswers = answers[qIndex] || [];
+    if (qType === "radio") {
+      setAnswers({ ...answers, [qIndex]: [oIndex] });
+    } else {
+      // Для чекбоксов (несколько вариантов)
+      if (currentAnswers.includes(oIndex)) {
+        setAnswers({
+          ...answers,
+          [qIndex]: currentAnswers.filter((i) => i !== oIndex),
+        });
+      } else {
+        setAnswers({
+          ...answers,
+          [qIndex]: [...currentAnswers, oIndex],
+        });
+      }
+    }
+  };
+
+  // Отправка результатов
+  const handleSubmit = async () => {
+    if (!studentName.trim()) {
+      return alert("Пожалуйста, введите ваше ФИО перед отправкой теста!");
+    }
+
+    if (!quiz || !quiz.blocks) return;
+
+    // Парсим настройки теста из описания
+    let settings = {
+      pointsPerQuestion: 1,
+      passScore: 50,
+      passMode: "absolute",
+    };
+    try {
+      settings = JSON.parse(quiz.description);
+    } catch (e) {}
+
+    let totalScore = 0;
+    let maxPossibleScore = 0;
+    const pointsPerQ = Number(settings.pointsPerQuestion) || 1;
+
+    // Проверяем ответы
+    quiz.blocks.forEach((block, qIndex) => {
+      if (block.type === "question") {
+        maxPossibleScore += pointsPerQ;
+        const correct = block.content.correctAnswers || [];
+        const selected = answers[qIndex] || [];
+
+        // Сравниваем массивы правильных и выбранных ответов
+        const isCorrect =
+          correct.length === selected.length &&
+          correct.every((val) => selected.includes(val));
+
+        if (isCorrect) {
+          totalScore += pointsPerQ;
+        }
+      }
+    });
+
+    // Расчет проходного порога
+    let passed = false;
+    const passScore = Number(settings.passScore) || 0;
+    if (settings.passMode === "percentage") {
+      const percent =
+        maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
+      passed = percent >= passScore;
+    } else {
+      passed = totalScore >= passScore;
+    }
+
+    const resultData = {
+      quizId,
+      quizTitle: quiz.title,
+      studentName,
+      score: totalScore,
+      maxScore: maxPossibleScore,
+      passed,
+      folder: quiz.folder || "Общая",
+      submittedAt: new Date(),
+    };
+
+    setScoreResult(resultData);
+    setSubmitted(true);
+
+    // Отправляем результаты на бэкенд в нужную папку
+    try {
+      const API_URL =
+        import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
+      await fetch(`${API_URL}/api/submissions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(resultData),
+      });
+    } catch (err) {
+      console.error("Ошибка сохранения результатов на сервер:", err);
+    }
+  };
+
   if (loading) {
     return (
-      <div style={{ padding: "40px", textAlign: "center", fontSize: "18px" }}>
-        ⏳ Загружаем тест... (Render может просыпаться до 30 секунд)
+      <div style={{ padding: "60px", textAlign: "center", fontSize: "18px" }}>
+        ⏳ Загружаем тест... (Сервер на Render может просыпаться до 30 секунд)
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{ padding: "40px", textAlign: "center", color: "red" }}>
+      <div
+        style={{
+          padding: "60px",
+          textAlign: "center",
+          color: "#dc2626",
+          fontSize: "18px",
+        }}
+      >
         ❌ Ошибка: {error}
       </div>
     );
   }
 
-  return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", padding: "20px" }}>
+  // Экран после отправки результатов
+  if (submitted && scoreResult) {
+    return (
       <div
-        className="card"
-        style={{ textAlign: "center", padding: "40px 20px" }}
+        style={{
+          maxWidth: "600px",
+          margin: "60px auto",
+          padding: "30px",
+          background: "white",
+          borderRadius: "12px",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+          textAlign: "center",
+        }}
       >
-        <h1 style={{ marginBottom: "10px" }}>{quiz.title}</h1>
-        <p style={{ color: "gray", marginBottom: "20px" }}>
-          Успешно загружено из базы данных!
-        </p>
-        <p>
-          Папка для ответов: <strong>{quiz.folder || "Общая"}</strong>
-        </p>
+        <h2 style={{ marginBottom: "10px" }}>Тест завершен!</h2>
+        <p style={{ color: "gray", marginBottom: "20px" }}>{quiz.title}</p>
         <div
           style={{
-            marginTop: "30px",
             padding: "20px",
-            background: "#f3f4f6",
+            background: "#f8fafc",
             borderRadius: "8px",
+            marginBottom: "20px",
           }}
         >
-          <p>В этом тесте {quiz.blocks?.length || 0} вопросов.</p>
-          <p>
-            <em>
-              (Здесь мы скоро отрисуем сами вопросы и сделаем сбор ответов)
-            </em>
+          <p style={{ fontSize: "16px", marginBottom: "8px" }}>
+            Студент: <strong>{scoreResult.studentName}</strong>
+          </p>
+          <div
+            style={{
+              fontSize: "36px",
+              fontWeight: "bold",
+              color: scoreResult.passed ? "#10b981" : "#ef4444",
+              margin: "15px 0",
+            }}
+          >
+            {scoreResult.score} / {scoreResult.maxScore} баллов
+          </div>
+          <p
+            style={{
+              fontSize: "18px",
+              fontWeight: "600",
+              color: scoreResult.passed ? "#059669" : "#dc2626",
+            }}
+          >
+            {scoreResult.passed
+              ? "🎉 Тест сдан успешно!"
+              : "❌ Тест не пройден"}
           </p>
         </div>
+        <p style={{ color: "gray", fontSize: "14px" }}>
+          Результаты автоматически сохранены преподавателю.
+        </p>
       </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: "800px", margin: "20px auto", padding: "20px" }}>
+      {/* Шапка теста */}
+      <div className="card" style={{ marginBottom: "20px", padding: "24px" }}>
+        <h1 style={{ marginBottom: "6px" }}>{quiz.title}</h1>
+        <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>
+          Папка для отчетов: <strong>{quiz.folder || "Общая"}</strong>
+        </p>
+
+        <div style={{ marginTop: "16px" }}>
+          <label
+            className="form-label"
+            style={{ fontWeight: "600", display: "block", marginBottom: "6px" }}
+          >
+            Ваше ФИО / Имя:
+          </label>
+          <input
+            type="text"
+            placeholder="Введите фамилию и имя..."
+            value={studentName}
+            onChange={(e) => setStudentName(e.target.value)}
+            className="input-field"
+            style={{ width: "100%", boxSizing: "border-box" }}
+          />
+        </div>
+      </div>
+
+      {/* Список вопросов */}
+      {quiz.blocks?.map((block, qIndex) => {
+        if (block.type !== "question") return null;
+        const q = block.content;
+        return (
+          <div
+            key={qIndex}
+            className="card"
+            style={{ marginBottom: "20px", padding: "20px" }}
+          >
+            <h3 style={{ marginBottom: "15px", fontSize: "16px" }}>
+              {qIndex + 1}. {q.text}
+            </h3>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+            >
+              {q.options.map((opt, oIndex) => {
+                const isSelected = (answers[qIndex] || []).includes(oIndex);
+                return (
+                  <label
+                    key={oIndex}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      padding: "12px 16px",
+                      background: isSelected ? "#ecfdf5" : "#f9fafb",
+                      border: `1px solid ${isSelected ? "#10b981" : "#e5e7eb"}`,
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <input
+                      type={q.type === "radio" ? "radio" : "checkbox"}
+                      name={`question-${qIndex}`}
+                      checked={isSelected}
+                      onChange={() =>
+                        handleOptionSelect(qIndex, oIndex, q.type)
+                      }
+                      style={{
+                        cursor: "pointer",
+                        width: "18px",
+                        height: "18px",
+                      }}
+                    />
+                    <span
+                      style={{ fontSize: "15px", color: "var(--text-main)" }}
+                    >
+                      {opt}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      <button
+        onClick={handleSubmit}
+        className="btn btn-primary"
+        style={{
+          width: "100%",
+          padding: "16px",
+          fontSize: "16px",
+          background: "#10b981",
+          borderColor: "#10b981",
+          cursor: "pointer",
+          justifyContent: "center",
+        }}
+      >
+        Завершить и отправить ответы
+      </button>
     </div>
   );
 }
