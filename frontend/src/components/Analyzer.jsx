@@ -211,10 +211,11 @@ export default function Analyzer() {
       reader.onload = async (event) => {
         try {
           const json = JSON.parse(event.target.result);
+
+          // 1. Формируем данные для мгновенной отрисовки на фронтенде
           const tempId =
             Date.now().toString() + Math.random().toString(36).substr(2, 5);
-
-          const submissionData = {
+          const frontData = {
             ...json,
             _id: json._id || tempId,
             folder: currentFolder,
@@ -225,37 +226,34 @@ export default function Analyzer() {
             passed: Boolean(json.passed),
           };
 
-          // Мгновенно добавляем на экран, чтобы избежать "зависания"
-          setResults((prev) => [...prev, submissionData]);
+          // Мгновенно показываем на экране
+          setResults((prev) => [...prev, frontData]);
+
+          // 2. Отделяем _id, чтобы не ломать MongoDB. Она сама создаст валидный ObjectId.
+          const { _id, ...serverData } = frontData;
 
           const response = await fetch(`${API_URL}/api/submissions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(submissionData),
+            body: JSON.stringify(serverData),
           });
 
           if (response.ok) {
             const savedData = await response.json();
-            // Обновляем временный ID на тот, что пришел из базы
+            // Меняем временный ID на тот, что создала база данных
             setResults((prev) =>
               prev.map((r) =>
-                r._id === tempId ? { ...r, _id: savedData._id } : r,
+                r._id === frontData._id ? { ...r, _id: savedData._id } : r,
               ),
             );
-            setNotice(`Файл ${file.name} успешно загружен!`);
+            setNotice(`Файл ${file.name} успешно сохранён в базе!`);
           } else {
-            console.error("Сервер отказался сохранять файл", file.name);
-            setNotice(`Сохранено локально: сервер недоступен (${file.name})`);
+            console.error("Ошибка сервера:", await response.text());
+            setNotice(`Ошибка сохранения на сервере: ${file.name}`);
           }
         } catch (error) {
-          console.error(
-            "Ошибка чтения или отправки локального файла",
-            file.name,
-            error,
-          );
-          alert(
-            `Не удалось прочитать файл ${file.name}. Проверьте формат JSON.`,
-          );
+          console.error("Ошибка файла", file.name, error);
+          alert(`Не удалось прочитать или сохранить файл ${file.name}.`);
         }
       };
       reader.readAsText(file);

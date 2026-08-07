@@ -1,20 +1,43 @@
 import React, { useState, useEffect } from "react";
 
 export default function QuizPlayer({ quizId }) {
+  const API_URL =
+    import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
+
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const [studentName, setStudentName] = useState("");
+  const [folders, setFolders] = useState([]);
+  const [selectedFolder, setSelectedFolder] = useState("");
   const [answers, setAnswers] = useState({}); // { questionIndex: [optionIndices] }
   const [submitted, setSubmitted] = useState(false);
   const [scoreResult, setScoreResult] = useState(null);
 
+  // 1. Загружаем список актуальных папок из Анализатора
+  useEffect(() => {
+    const fetchFolders = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/folders`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setFolders(data);
+          }
+        }
+      } catch (err) {
+        console.error("Ошибка при загрузке папок:", err);
+      }
+    };
+
+    fetchFolders();
+  }, [API_URL]);
+
+  // 2. Загружаем сам тест
   useEffect(() => {
     const fetchQuiz = async () => {
       try {
-        const API_URL =
-          import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
         const response = await fetch(`${API_URL}/api/surveys/${quizId}`);
 
         if (!response.ok) {
@@ -23,6 +46,11 @@ export default function QuizPlayer({ quizId }) {
 
         const data = await response.json();
         setQuiz(data);
+
+        // Если у теста уже была задана папка по умолчанию, ставим её
+        if (data.folder) {
+          setSelectedFolder(data.folder);
+        }
       } catch (err) {
         setError(err.message);
       } finally {
@@ -31,7 +59,14 @@ export default function QuizPlayer({ quizId }) {
     };
 
     fetchQuiz();
-  }, [quizId]);
+  }, [quizId, API_URL]);
+
+  // Если папка еще не выбрана, ставим первую из доступных
+  useEffect(() => {
+    if (!selectedFolder && folders.length > 0) {
+      setSelectedFolder(folders[0]);
+    }
+  }, [folders, selectedFolder]);
 
   // Обработка выбора варианта ответа
   const handleOptionSelect = (qIndex, oIndex, qType) => {
@@ -58,6 +93,10 @@ export default function QuizPlayer({ quizId }) {
   const handleSubmit = async () => {
     if (!studentName.trim()) {
       return alert("Пожалуйста, введите ваше ФИО перед отправкой теста!");
+    }
+
+    if (!selectedFolder) {
+      return alert("Пожалуйста, выберите вашу группу / папку!");
     }
 
     if (!quiz || !quiz.blocks) return;
@@ -120,23 +159,21 @@ export default function QuizPlayer({ quizId }) {
     const resultData = {
       quizId,
       quizTitle: quiz.title,
-      fio: studentName, // Анализатор ожидает поле fio
-      studentName: studentName, // Оставляем для совместимости
+      fio: studentName.trim(), // Анализатор ожидает поле fio
+      studentName: studentName.trim(), // Оставляем для совместимости
       score: totalScore,
       maxScore: maxPossibleScore,
       passed,
-      folder: quiz.folder || "Общая", // Указываем папку
-      details: details, // Передаем собранные детали ответов!
+      folder: selectedFolder || quiz.folder || "Общая", // Выбранная учеником папка
+      details: details, // Передаем собранные детали ответов
       submittedAt: new Date(),
     };
 
     setScoreResult(resultData);
     setSubmitted(true);
 
-    // Отправляем результаты на бэкенд в нужную папку
+    // Отправляем результаты на бэкенд в выбранную папку
     try {
-      const API_URL =
-        import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
       await fetch(`${API_URL}/api/submissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -197,6 +234,11 @@ export default function QuizPlayer({ quizId }) {
           <p style={{ fontSize: "16px", marginBottom: "8px" }}>
             Студент: <strong>{scoreResult.studentName}</strong>
           </p>
+          <p
+            style={{ fontSize: "14px", color: "#6b7280", marginBottom: "12px" }}
+          >
+            Группа / Папка: <strong>{scoreResult.folder}</strong>
+          </p>
           <div
             style={{
               fontSize: "36px",
@@ -230,26 +272,69 @@ export default function QuizPlayer({ quizId }) {
     <div style={{ maxWidth: "800px", margin: "20px auto", padding: "20px" }}>
       {/* Шапка теста */}
       <div className="card" style={{ marginBottom: "20px", padding: "24px" }}>
-        <h1 style={{ marginBottom: "6px" }}>{quiz.title}</h1>
-        <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>
-          Папка для отчетов: <strong>{quiz.folder || "Общая"}</strong>
-        </p>
+        <h1 style={{ marginBottom: "16px" }}>{quiz.title}</h1>
 
-        <div style={{ marginTop: "16px" }}>
-          <label
-            className="form-label"
-            style={{ fontWeight: "600", display: "block", marginBottom: "6px" }}
-          >
-            Ваше ФИО / Имя:
-          </label>
-          <input
-            type="text"
-            placeholder="Введите фамилию и имя..."
-            value={studentName}
-            onChange={(e) => setStudentName(e.target.value)}
-            className="input-field"
-            style={{ width: "100%", boxSizing: "border-box" }}
-          />
+        <div style={{ display: "grid", gap: "16px" }}>
+          {/* Ввод ФИО */}
+          <div>
+            <label
+              className="form-label"
+              style={{
+                fontWeight: "600",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
+              Ваше ФИО / Имя:
+            </label>
+            <input
+              type="text"
+              placeholder="Введите фамилию и имя..."
+              value={studentName}
+              onChange={(e) => setStudentName(e.target.value)}
+              className="input-field"
+              style={{ width: "100%", boxSizing: "border-box" }}
+            />
+          </div>
+
+          {/* Выбор Группы / Папки */}
+          <div>
+            <label
+              className="form-label"
+              style={{
+                fontWeight: "600",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
+              Укажите вашу группу / класс:
+            </label>
+            <select
+              value={selectedFolder}
+              onChange={(e) => setSelectedFolder(e.target.value)}
+              className="input-field"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px",
+                borderRadius: "8px",
+                border: "1px solid #d1d5db",
+                backgroundColor: "#fff",
+                cursor: "pointer",
+                fontSize: "14px",
+              }}
+            >
+              {folders.length === 0 ? (
+                <option value="Общая">Общая</option>
+              ) : (
+                folders.map((folder) => (
+                  <option key={folder} value={folder}>
+                    {folder}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
         </div>
       </div>
 
