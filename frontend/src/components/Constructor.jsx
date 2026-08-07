@@ -1,14 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { generateTestHTML } from "../testTemplate";
-import {
-  Plus,
-  Trash2,
-  Download,
-  CloudUpload,
-  Copy,
-  Check,
-  FolderPlus,
-} from "lucide-react";
+import { Plus, Trash2, Download, CloudUpload, Copy, Check } from "lucide-react";
 
 const letterFor = (i) => String.fromCharCode(65 + i);
 
@@ -24,38 +16,6 @@ export default function Constructor() {
   const [savedQuizId, setSavedQuizId] = useState(null);
   const [isCopied, setIsCopied] = useState(false);
 
-  // --- ВОТ ОТСЮДА НАЧИНАЕТСЯ НОВАЯ ЛОГИКА ПАПОК ---
-
-  // --- ЛОГИКА ПАПОК (ТОЛЬКО ЧТЕНИЕ) ---
-  const [folders, setFolders] = useState([]);
-  const [selectedFolder, setSelectedFolder] = useState("");
-
-  // Загружаем актуальные папки с сервера (созданные через Анализатор)
-  useEffect(() => {
-    const fetchFolders = async () => {
-      try {
-        const API_URL =
-          import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
-        const res = await fetch(`${API_URL}/api/folders`);
-        const data = await res.json();
-
-        if (Array.isArray(data) && data.length > 0) {
-          setFolders(data);
-          setSelectedFolder(data[0]); // По умолчанию выбираем первую папку (например, "1")
-        } else {
-          // Если вообще ничего нет, ставим 1 как fallback
-          setFolders(["1"]);
-          setSelectedFolder("1");
-        }
-      } catch (err) {
-        console.error("Ошибка загрузки папок:", err);
-      }
-    };
-    fetchFolders();
-  }, []);
-  // --- КОНЕЦ ЛОГИКИ ПАПОК ---
-
-  // Ниже идет твой старый код: handleCopyLink, addQuestion, updateQuestion и так далее...
   const handleCopyLink = () => {
     if (!savedQuizId) return;
     const link = `https://victorini.vercel.app/quiz/${savedQuizId}`;
@@ -139,7 +99,7 @@ export default function Constructor() {
     URL.revokeObjectURL(url);
   };
 
-  // --- ОБНОВЛЕННАЯ ФУНКЦИЯ СОХРАНЕНИЯ В БД ---
+  // --- СОХРАНЕНИЕ В БАЗУ ДАННЫХ ---
   const saveSurveyToServer = async () => {
     if (questions.length === 0) return alert("Добавьте хотя бы один вопрос");
 
@@ -155,12 +115,10 @@ export default function Constructor() {
       content: q,
     }));
 
-    // Добавляем информацию о папке в объект для бэкенда
     const surveyData = {
       title: settings.title,
-      description: JSON.stringify({ ...settings, folder: selectedFolder }),
+      description: JSON.stringify(settings),
       blocks: blocks,
-      folder: selectedFolder,
     };
 
     const API_URL =
@@ -178,7 +136,6 @@ export default function Constructor() {
       const data = await response.json();
 
       if (response.ok) {
-        // Сохраняем ID, чтобы показать кликабельную ссылку на экране
         setSavedQuizId(data._id);
       } else {
         alert("Ошибка при сохранении: " + (data.error || "Неизвестная ошибка"));
@@ -212,55 +169,6 @@ export default function Constructor() {
             }
             className="input-field title-input"
           />
-        </div>
-
-        {/* БЛОК ВЫБОРА ПАПКИ (ТОЛЬКО ЧТЕНИЕ ИЗ АНАЛИЗАТОРА) */}
-        <div
-          className="form-group"
-          style={{
-            background: "#f8fafc",
-            padding: "12px",
-            borderRadius: "8px",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <label
-            className="form-label"
-            style={{ fontWeight: "600", display: "block", marginBottom: "8px" }}
-          >
-            📁 Папка для ответов учеников (из Анализатора)
-          </label>
-
-          <select
-            value={selectedFolder}
-            onChange={(e) => setSelectedFolder(e.target.value)}
-            className="input-field"
-            style={{
-              width: "100%",
-              padding: "10px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              cursor: "pointer",
-            }}
-          >
-            {folders.map((f, i) => (
-              <option key={i} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
-
-          <p
-            style={{
-              fontSize: "12px",
-              color: "var(--text-muted)",
-              marginTop: "8px",
-              fontStyle: "italic",
-              marginBottom: 0,
-            }}
-          >
-            * Создавать и удалять папки можно только на вкладке «Анализатор»
-          </p>
         </div>
 
         <div className="grid-2">
@@ -519,8 +427,7 @@ export default function Constructor() {
           <p
             style={{ margin: "0 0 12px 0", color: "#047857", fontSize: "14px" }}
           >
-            Ответы учеников будут сохраняться в папку:{" "}
-            <strong>«{selectedFolder}»</strong>
+            Теперь вы можете скопировать ссылку и отправить её ученикам:
           </p>
 
           <div style={{ display: "flex", gap: "10px" }}>
