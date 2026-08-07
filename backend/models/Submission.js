@@ -8,6 +8,12 @@ const submissionSchema = new mongoose.Schema({
   },
   quizTitle: String,
   studentName: { type: String, required: true },
+
+  // --- ДОБАВЛЕННЫЕ ПОЛЯ ДЛЯ АНАЛИЗАТОРА ---
+  fio: { type: String },
+  details: { type: Array, default: [] },
+  // ----------------------------------------
+
   score: { type: Number, required: true },
   maxScore: { type: Number, required: true },
   passed: { type: Boolean, required: true },

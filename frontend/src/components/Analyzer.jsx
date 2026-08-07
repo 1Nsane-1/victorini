@@ -64,9 +64,7 @@ export default function Analyzer() {
           // НОРМАЛИЗАЦИЯ ДАННЫХ
           const normalized = dataSubmissions.map((r) => ({
             ...r,
-            // Если есть fio — берем его, иначе берем studentName, иначе ставим заглушку
             fio: r.fio || r.studentName || "Без имени",
-            // Если деталей нет в БД, подставляем пустой массив, чтобы избежать белого экрана
             details: r.details || [],
             score: r.score || 0,
             maxScore: r.maxScore || 0,
@@ -81,8 +79,6 @@ export default function Analyzer() {
 
     fetchInitialData();
   }, [API_URL]);
-
-  // (useEffect с сохранением в localStorage для results должен быть удален!)
 
   useEffect(() => {
     if (!notice) return;
@@ -199,7 +195,7 @@ export default function Analyzer() {
     }
   };
 
-  // Загрузка файлов и отправка их в БД
+  // --- ИСПРАВЛЕННЫЙ ШАГ 3 (Загрузка офлайн файлов) ---
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -215,16 +211,23 @@ export default function Analyzer() {
       reader.onload = async (event) => {
         try {
           const json = JSON.parse(event.target.result);
+          const tempId =
+            Date.now().toString() + Math.random().toString(36).substr(2, 5);
 
-          // Формируем объект для базы данных
           const submissionData = {
             ...json,
-            folder: currentFolder, // Принудительно кладем в текущую открытую папку
+            _id: json._id || tempId,
+            folder: currentFolder,
             fio: json.fio || json.studentName || "Без имени",
             details: json.details || [],
+            score: Number(json.score) || 0,
+            maxScore: Number(json.maxScore) || 0,
+            passed: Boolean(json.passed),
           };
 
-          // 1. Отправляем в базу данных
+          // Мгновенно добавляем на экран, чтобы избежать "зависания"
+          setResults((prev) => [...prev, submissionData]);
+
           const response = await fetch(`${API_URL}/api/submissions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -233,20 +236,25 @@ export default function Analyzer() {
 
           if (response.ok) {
             const savedData = await response.json();
-            // 2. Добавляем на экран
-            setResults((prev) => [
-              ...prev,
-              { ...submissionData, _id: savedData._id || makeId() },
-            ]);
-            setNotice(`Файл ${file.name} успешно загружен и сохранен!`);
+            // Обновляем временный ID на тот, что пришел из базы
+            setResults((prev) =>
+              prev.map((r) =>
+                r._id === tempId ? { ...r, _id: savedData._id } : r,
+              ),
+            );
+            setNotice(`Файл ${file.name} успешно загружен!`);
           } else {
             console.error("Сервер отказался сохранять файл", file.name);
+            setNotice(`Сохранено локально: сервер недоступен (${file.name})`);
           }
         } catch (error) {
           console.error(
             "Ошибка чтения или отправки локального файла",
             file.name,
             error,
+          );
+          alert(
+            `Не удалось прочитать файл ${file.name}. Проверьте формат JSON.`,
           );
         }
       };
@@ -283,17 +291,14 @@ export default function Analyzer() {
     }
   };
 
-  // Поштучное удаление студента
   const handleDeleteSingle = (id, e) => {
     e.stopPropagation();
     if (!window.confirm("Удалить этот результат?")) return;
-
     setResults(results.filter((r) => r._id !== id));
     if (selectedId === id) setSelectedId(null);
     setNotice("Результат удален");
   };
 
-  // Очистка ВСЕЙ текущей папки
   const clearCurrentFolder = () => {
     if (
       !window.confirm(
@@ -305,7 +310,13 @@ export default function Analyzer() {
     setSelectedId(null);
   };
 
-  // Вычисление изолированной статистики по выбранной папке
+  // --- ИСПРАВЛЕННЫЙ ШАГ 2 (Правильная сортировка и проценты) ---
+  const getPercent = (score, maxScore) => {
+    const s = Number(score) || 0;
+    const m = Number(maxScore) || 1;
+    return (s / m) * 100;
+  };
+
   const totalStudents = folderResults.length;
   const passedStudents = folderResults.filter((r) => r.passed).length;
   const avgScore = totalStudents
@@ -324,15 +335,25 @@ export default function Analyzer() {
       : (sorted[mid - 1] + sorted[mid]) / 2;
   }, [folderResults, totalStudents]);
 
-  const best = useMemo(
-    () =>
-      totalStudents
-        ? folderResults.reduce((a, b) => (b.score > a.score ? b : a))
-        : null,
-    [folderResults, totalStudents],
-  );
+  const best = useMemo(() => {
+    if (!folderResults || folderResults.length === 0) return null;
+    return [...folderResults].reduce((prev, current) => {
+      const prevPercent = getPercent(prev.score, prev.maxScore);
+      const currPercent = getPercent(current.score, current.maxScore);
+      if (currPercent !== prevPercent)
+        return currPercent > prevPercent ? current : prev;
 
-  // Фильтрация и сортировка таблицы
+      const prevScore = Number(prev.score) || 0;
+      const currScore = Number(current.score) || 0;
+      if (currScore !== prevScore)
+        return currScore > prevScore ? current : prev;
+
+      if (current.passed !== prev.passed)
+        return current.passed ? current : prev;
+      return prev;
+    });
+  }, [folderResults]);
+
   const filteredResults = useMemo(() => {
     return folderResults
       .filter((r) => (r.fio || "").toLowerCase().includes(search.toLowerCase()))
@@ -343,9 +364,19 @@ export default function Analyzer() {
       })
       .sort((a, b) => {
         let cmp = 0;
-        if (sortKey === "score") cmp = a.score - b.score;
-        else if (sortKey === "name")
+        if (sortKey === "score") {
+          cmp = (Number(a.score) || 0) - (Number(b.score) || 0);
+          if (cmp === 0) {
+            const pctA = getPercent(a.score, a.maxScore);
+            const pctB = getPercent(b.score, b.maxScore);
+            cmp = pctA - pctB;
+          }
+          if (cmp === 0) {
+            cmp = a.passed === b.passed ? 0 : a.passed ? -1 : 1;
+          }
+        } else if (sortKey === "name") {
           cmp = (a.fio || "").localeCompare(b.fio || "", "ru");
+        }
         return sortDir === "asc" ? cmp : -cmp;
       });
   }, [folderResults, search, statusFilter, sortKey, sortDir]);
@@ -359,9 +390,17 @@ export default function Analyzer() {
   };
 
   const rankOf = (id) => {
-    const sorted = [...folderResults].sort((a, b) => b.score - a.score);
+    const sorted = [...folderResults].sort((a, b) => {
+      const scoreDiff = (Number(b.score) || 0) - (Number(a.score) || 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      const pctA = getPercent(a.score, a.maxScore);
+      const pctB = getPercent(b.score, b.maxScore);
+      if (pctB !== pctA) return pctB - pctA;
+      return a.passed === b.passed ? 0 : a.passed ? 1 : -1;
+    });
     return sorted.findIndex((r) => r._id === id) + 1;
   };
+  // -------------------------------------------------------------
 
   const selectedIndexInList = selectedStudent
     ? filteredResults.findIndex((r) => r._id === selectedStudent._id)
