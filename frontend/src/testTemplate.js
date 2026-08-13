@@ -13,8 +13,8 @@ export const generateTestHTML = (quizData) => {
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 md:p-8 flex items-center justify-center">
-    <div id="app" class="w-full max-w-2xl bg-white rounded-xl shadow-lg p-6 md:p-10 fade-in">
-        </div>
+    <div id="app" class="w-full max-w-3xl bg-white rounded-xl shadow-lg p-6 md:p-10 fade-in">
+    </div>
 
     <script>
         const quizData = ${dataString};
@@ -52,18 +52,44 @@ export const generateTestHTML = (quizData) => {
                     const inputType = q.type === 'radio' ? 'radio' : 'checkbox';
                     const name = q.type === 'radio' ? \`q_\${qIndex}\` : \`q_\${qIndex}_\${oIndex}\`;
                     return \`
-                        <label class="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition">
+                        <label class="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition bg-white">
                             <input type="\${inputType}" name="\${name}" value="\${oIndex}" onchange="saveAnswer(\${qIndex}, \${oIndex}, '\${q.type}', this.checked)" class="h-4 w-4 text-blue-600 focus:ring-blue-500">
                             <span class="text-gray-700">\${opt}</span>
                         </label>
                     \`;
                 }).join('');
 
+                const layout = q.imageLayout || 'top';
+                const hasImage = Boolean(q.imageUrl);
+
+                let imageHtml = '';
+                if (hasImage) {
+                    imageHtml = \`
+                        <div class="\${layout === 'top' ? 'w-full mb-4' : 'w-full md:w-1/2 flex-shrink-0'}">
+                            <img src="\${q.imageUrl}" alt="Картинка к вопросу" class="w-full max-h-80 object-contain rounded-lg border border-gray-200">
+                        </div>
+                    \`;
+                }
+
+                let flexContainerClass = 'flex flex-col';
+                if (hasImage && layout === 'left') {
+                    flexContainerClass = 'flex flex-col md:flex-row gap-6 items-start';
+                } else if (hasImage && layout === 'right') {
+                    flexContainerClass = 'flex flex-col md:flex-row-reverse gap-6 items-start';
+                } else if (hasImage && layout === 'top') {
+                    flexContainerClass = 'flex flex-col';
+                }
+
                 return \`
                     <div class="mb-8 p-6 border border-gray-100 rounded-xl bg-gray-50 fade-in">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4">\${qIndex + 1}. \${q.text}</h3>
-                        <div class="space-y-2">
-                            \${optionsHtml}
+                        <div class="\${flexContainerClass}">
+                            \${imageHtml}
+                            <div class="w-full">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">\${qIndex + 1}. \${q.text}</h3>
+                                <div class="space-y-2">
+                                    \${optionsHtml}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 \`;
@@ -100,7 +126,6 @@ export const generateTestHTML = (quizData) => {
                 const userAns = currentAnswers[index] || [];
                 const correctAns = q.correctAnswers;
                 
-                // Проверка: массивы должны совпадать по элементам
                 const isCorrect = userAns.length === correctAns.length && 
                                   userAns.every(val => correctAns.includes(val));
                 
@@ -164,7 +189,6 @@ export const generateTestHTML = (quizData) => {
             downloadAnchorNode.remove();
         }
 
-        // Инициализация
         renderAuth();
     </script>
 </body>

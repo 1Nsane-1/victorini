@@ -47,7 +47,6 @@ export default function QuizPlayer({ quizId }) {
         const data = await response.json();
         setQuiz(data);
 
-        // Если у теста уже была задана папка по умолчанию, ставим её
         if (data.folder) {
           setSelectedFolder(data.folder);
         }
@@ -61,20 +60,17 @@ export default function QuizPlayer({ quizId }) {
     fetchQuiz();
   }, [quizId, API_URL]);
 
-  // Если папка еще не выбрана, ставим первую из доступных
   useEffect(() => {
     if (!selectedFolder && folders.length > 0) {
       setSelectedFolder(folders[0]);
     }
   }, [folders, selectedFolder]);
 
-  // Обработка выбора варианта ответа
   const handleOptionSelect = (qIndex, oIndex, qType) => {
     const currentAnswers = answers[qIndex] || [];
     if (qType === "radio") {
       setAnswers({ ...answers, [qIndex]: [oIndex] });
     } else {
-      // Для чекбоксов (несколько вариантов)
       if (currentAnswers.includes(oIndex)) {
         setAnswers({
           ...answers,
@@ -89,7 +85,6 @@ export default function QuizPlayer({ quizId }) {
     }
   };
 
-  // Отправка результатов
   const handleSubmit = async () => {
     if (!studentName.trim()) {
       return alert("Пожалуйста, введите ваше ФИО перед отправкой теста!");
@@ -101,7 +96,6 @@ export default function QuizPlayer({ quizId }) {
 
     if (!quiz || !quiz.blocks) return;
 
-    // Парсим настройки теста из описания
     let settings = {
       pointsPerQuestion: 1,
       passScore: 50,
@@ -115,17 +109,14 @@ export default function QuizPlayer({ quizId }) {
     let maxPossibleScore = 0;
     const pointsPerQ = Number(settings.pointsPerQuestion) || 1;
 
-    // Массив для хранения подробной статистики по каждому вопросу
     const details = [];
 
-    // Проверяем ответы
     quiz.blocks.forEach((block, qIndex) => {
       if (block.type === "question") {
         maxPossibleScore += pointsPerQ;
         const correct = block.content.correctAnswers || [];
         const selected = answers[qIndex] || [];
 
-        // Сравниваем массивы правильных и выбранных ответов
         const isCorrect =
           correct.length === selected.length &&
           correct.every((val) => selected.includes(val));
@@ -134,7 +125,6 @@ export default function QuizPlayer({ quizId }) {
           totalScore += pointsPerQ;
         }
 
-        // Сохраняем детали ответа для Анализатора
         details.push({
           question: block.content.text || `Вопрос ${qIndex + 1}`,
           isCorrect: isCorrect,
@@ -144,7 +134,6 @@ export default function QuizPlayer({ quizId }) {
       }
     });
 
-    // Расчет проходного порога
     let passed = false;
     const passScore = Number(settings.passScore) || 0;
     if (settings.passMode === "percentage") {
@@ -155,24 +144,22 @@ export default function QuizPlayer({ quizId }) {
       passed = totalScore >= passScore;
     }
 
-    // Собираем финальный объект для отправки
     const resultData = {
       quizId,
       quizTitle: quiz.title,
-      fio: studentName.trim(), // Анализатор ожидает поле fio
-      studentName: studentName.trim(), // Оставляем для совместимости
+      fio: studentName.trim(),
+      studentName: studentName.trim(),
       score: totalScore,
       maxScore: maxPossibleScore,
       passed,
-      folder: selectedFolder || quiz.folder || "Общая", // Выбранная учеником папка
-      details: details, // Передаем собранные детали ответов
+      folder: selectedFolder || quiz.folder || "Общая",
+      details: details,
       submittedAt: new Date(),
     };
 
     setScoreResult(resultData);
     setSubmitted(true);
 
-    // Отправляем результаты на бэкенд в выбранную папку
     try {
       await fetch(`${API_URL}/api/submissions`, {
         method: "POST",
@@ -187,7 +174,7 @@ export default function QuizPlayer({ quizId }) {
   if (loading) {
     return (
       <div style={{ padding: "60px", textAlign: "center", fontSize: "18px" }}>
-        ⏳ Загружаем тест... (Сервер на Render может просыпаться до 30 секунд)
+        ⏳ Загружаем тест...
       </div>
     );
   }
@@ -207,7 +194,6 @@ export default function QuizPlayer({ quizId }) {
     );
   }
 
-  // Экран после отправки результатов
   if (submitted && scoreResult) {
     return (
       <div
@@ -275,7 +261,6 @@ export default function QuizPlayer({ quizId }) {
         <h1 style={{ marginBottom: "16px" }}>{quiz.title}</h1>
 
         <div style={{ display: "grid", gap: "16px" }}>
-          {/* Ввод ФИО */}
           <div>
             <label
               className="form-label"
@@ -297,7 +282,6 @@ export default function QuizPlayer({ quizId }) {
             />
           </div>
 
-          {/* Выбор Группы / Папки */}
           <div>
             <label
               className="form-label"
@@ -342,56 +326,107 @@ export default function QuizPlayer({ quizId }) {
       {quiz.blocks?.map((block, qIndex) => {
         if (block.type !== "question") return null;
         const q = block.content;
+
+        const layout = q.imageLayout || "top";
+        const hasImage = Boolean(q.imageUrl);
+
+        let flexDirection = "column";
+        if (hasImage && layout === "left") flexDirection = "row";
+        if (hasImage && layout === "right") flexDirection = "row-reverse";
+
         return (
           <div
             key={qIndex}
             className="card"
             style={{ marginBottom: "20px", padding: "20px" }}
           >
-            <h3 style={{ marginBottom: "15px", fontSize: "16px" }}>
-              {qIndex + 1}. {q.text}
-            </h3>
             <div
-              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+              style={{
+                display: "flex",
+                flexDirection: flexDirection,
+                gap: "20px",
+                alignItems: layout === "top" ? "stretch" : "flex-start",
+              }}
             >
-              {q.options.map((opt, oIndex) => {
-                const isSelected = (answers[qIndex] || []).includes(oIndex);
-                return (
-                  <label
-                    key={oIndex}
+              {/* Фотография */}
+              {hasImage && (
+                <div
+                  style={{
+                    flex: layout === "top" ? "none" : "1",
+                    width: layout === "top" ? "100%" : "40%",
+                    minWidth: layout === "top" ? "auto" : "200px",
+                    marginBottom: layout === "top" ? "15px" : "0",
+                  }}
+                >
+                  <img
+                    src={q.imageUrl}
+                    alt={`Картинка к вопросу ${qIndex + 1}`}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "12px",
-                      padding: "12px 16px",
-                      background: isSelected ? "#ecfdf5" : "#f9fafb",
-                      border: `1px solid ${isSelected ? "#10b981" : "#e5e7eb"}`,
+                      width: "100%",
+                      maxHeight: "350px",
+                      objectFit: "contain",
                       borderRadius: "8px",
-                      cursor: "pointer",
-                      transition: "all 0.2s",
+                      border: "1px solid #e5e7eb",
                     }}
-                  >
-                    <input
-                      type={q.type === "radio" ? "radio" : "checkbox"}
-                      name={`question-${qIndex}`}
-                      checked={isSelected}
-                      onChange={() =>
-                        handleOptionSelect(qIndex, oIndex, q.type)
-                      }
-                      style={{
-                        cursor: "pointer",
-                        width: "18px",
-                        height: "18px",
-                      }}
-                    />
-                    <span
-                      style={{ fontSize: "15px", color: "var(--text-main)" }}
-                    >
-                      {opt}
-                    </span>
-                  </label>
-                );
-              })}
+                  />
+                </div>
+              )}
+
+              {/* Текст вопроса и варианты */}
+              <div style={{ flex: "2", width: "100%" }}>
+                <h3 style={{ marginBottom: "15px", fontSize: "16px" }}>
+                  {qIndex + 1}. {q.text}
+                </h3>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  {q.options.map((opt, oIndex) => {
+                    const isSelected = (answers[qIndex] || []).includes(oIndex);
+                    return (
+                      <label
+                        key={oIndex}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "12px",
+                          padding: "12px 16px",
+                          background: isSelected ? "#ecfdf5" : "#f9fafb",
+                          border: `1px solid ${isSelected ? "#10b981" : "#e5e7eb"}`,
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                        }}
+                      >
+                        <input
+                          type={q.type === "radio" ? "radio" : "checkbox"}
+                          name={`question-${qIndex}`}
+                          checked={isSelected}
+                          onChange={() =>
+                            handleOptionSelect(qIndex, oIndex, q.type)
+                          }
+                          style={{
+                            cursor: "pointer",
+                            width: "18px",
+                            height: "18px",
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontSize: "15px",
+                            color: "var(--text-main)",
+                          }}
+                        >
+                          {opt}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         );
