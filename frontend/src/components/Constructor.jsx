@@ -1,6 +1,14 @@
 import React, { useState } from "react";
 import { generateTestHTML } from "../testTemplate";
-import { Plus, Trash2, Download, CloudUpload, Copy, Check } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Download,
+  CloudUpload,
+  Copy,
+  Check,
+  ImagePlus,
+} from "lucide-react";
 
 const letterFor = (i) => String.fromCharCode(65 + i);
 
@@ -16,6 +24,9 @@ export default function Constructor() {
   const [savedQuizId, setSavedQuizId] = useState(null);
   const [isCopied, setIsCopied] = useState(false);
 
+  // Ключ для загрузки картинок на ImgBB
+  const IMGBB_API_KEY = "8deb2e334c5cdd899dc40c4e49f1d866";
+
   const handleCopyLink = () => {
     if (!savedQuizId) return;
     const link = `https://victorini.vercel.app/quiz/${savedQuizId}`;
@@ -27,7 +38,14 @@ export default function Constructor() {
   const addQuestion = () => {
     setQuestions([
       ...questions,
-      { text: "", type: "radio", options: [""], correctAnswers: [] },
+      {
+        text: "",
+        type: "radio",
+        options: [""],
+        correctAnswers: [],
+        imageUrl: "",
+        imageLayout: "top",
+      },
     ]);
   };
 
@@ -77,6 +95,46 @@ export default function Constructor() {
     setQuestions(questions.filter((_, i) => i !== index));
   };
 
+  // --- Функция загрузки картинки ---
+  const handleImageUpload = async (qIndex, event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Включаем "режим загрузки" визуально
+    const inputElement = event.target;
+    const parentLabel = inputElement.parentElement;
+    const originalText = parentLabel.innerText;
+    parentLabel.innerText = "Загрузка...";
+
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("key", IMGBB_API_KEY);
+
+    try {
+      const response = await fetch("https://api.imgbb.com/1/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        updateQuestion(qIndex, "imageUrl", data.data.url);
+        if (!questions[qIndex].imageLayout) {
+          updateQuestion(qIndex, "imageLayout", "top");
+        }
+      } else {
+        alert("Ошибка загрузки изображения на сервер");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Ошибка сети при загрузке изображения");
+    } finally {
+      // Возвращаем текст обратно (хотя лейбл и так исчезнет при успешной загрузке)
+      if (parentLabel)
+        parentLabel.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Добавить фото`;
+    }
+  };
+
   const handleGenerate = () => {
     if (questions.length === 0) return alert("Добавьте хотя бы один вопрос");
 
@@ -112,7 +170,7 @@ export default function Constructor() {
 
     const blocks = questions.map((q) => ({
       type: "question",
-      content: q,
+      content: q, // Тут теперь автоматически улетят и imageUrl, и imageLayout!
     }));
 
     const surveyData = {
@@ -299,7 +357,7 @@ export default function Constructor() {
           <div className="question-row">
             <div className="q-number">{qIndex + 1}</div>
             <div className="q-content">
-              <div className="q-header">
+              <div className="q-header" style={{ marginBottom: "12px" }}>
                 <input
                   type="text"
                   value={q.text}
@@ -328,6 +386,97 @@ export default function Constructor() {
                   <Trash2 size={20} />
                 </button>
               </div>
+
+              {/* НОВЫЙ БЛОК: ЗАГРУЗКА И НАСТРОЙКА КАРТИНКИ */}
+              <div style={{ marginBottom: "16px" }}>
+                {!q.imageUrl ? (
+                  <label
+                    className="btn btn-outline"
+                    style={{
+                      cursor: "pointer",
+                      padding: "8px 12px",
+                      fontSize: "14px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <ImagePlus size={16} style={{ marginRight: "6px" }} />
+                    Добавить фото
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={(e) => handleImageUpload(qIndex, e)}
+                    />
+                  </label>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      background: "#f8fafc",
+                      padding: "10px",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
+                    <img
+                      src={q.imageUrl}
+                      alt="Превью"
+                      style={{
+                        height: "40px",
+                        width: "auto",
+                        borderRadius: "4px",
+                        border: "1px solid #cbd5e1",
+                      }}
+                    />
+
+                    <div style={{ flex: 1 }}>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          color: "var(--text-muted)",
+                          display: "block",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        Расположение фото
+                      </span>
+                      <select
+                        value={q.imageLayout || "top"}
+                        onChange={(e) =>
+                          updateQuestion(qIndex, "imageLayout", e.target.value)
+                        }
+                        className="input-field"
+                        style={{
+                          padding: "6px",
+                          height: "auto",
+                          width: "100%",
+                          fontSize: "14px",
+                        }}
+                      >
+                        <option value="top">Сверху (над ответами)</option>
+                        <option value="left">Слева от ответов</option>
+                        <option value="right">Справа от ответов</option>
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        updateQuestion(qIndex, "imageUrl", "");
+                        updateQuestion(qIndex, "imageLayout", "top");
+                      }}
+                      className="btn-icon"
+                      style={{ color: "#ef4444", marginTop: "16px" }}
+                      title="Удалить фото"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                )}
+              </div>
+              {/* КОНЕЦ БЛОКА С КАРТИНКАМИ */}
 
               <div>
                 {q.options.map((opt, oIndex) => {
@@ -400,7 +549,6 @@ export default function Constructor() {
         </button>
       </div>
 
-      {/* КАРТОЧКА С ГОТОВОЙ ССЫЛКОЙ ДЛЯ ШЕРИНГА */}
       {savedQuizId && (
         <div
           className="card"
