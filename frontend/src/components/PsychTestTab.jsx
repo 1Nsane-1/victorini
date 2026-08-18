@@ -1,87 +1,72 @@
-import React, { useState } from "react";
-import {
-  Folder,
-  FolderPlus,
-  Link,
-  UserCheck,
-  AlertTriangle,
-  FileText,
-} from "lucide-react";
-
-// Первые вопросы из нашей базы 111 вопросов
-const sampleQuestions = [
-  {
-    id: 1,
-    text: "Я легко начинаю разговор с незнакомыми людьми.",
-    scale: "Экстраверсия",
-    type: "Прямой",
-  },
-  {
-    id: 2,
-    text: "Я часто испытываю чувство тревоги без видимой причины.",
-    scale: "Нейротизм",
-    type: "Прямой",
-  },
-  {
-    id: 3,
-    text: "Я стараюсь во всем помогать окружающим, если могу.",
-    scale: "Доброжелательность",
-    type: "Прямой",
-  },
-  {
-    id: 4,
-    text: "Я никогда в жизни ни разу не обманывал.",
-    scale: "Шкала лжи",
-    type: "Прямой",
-  },
-  {
-    id: 5,
-    text: "Я всегда содержу свои вещи в идеальном порядке.",
-    scale: "Добросовестность",
-    type: "Прямой",
-  },
-];
+import React, { useState, useEffect } from "react";
+import { Folder, FolderPlus, Link, AlertTriangle, Trash2 } from "lucide-react";
+import { psychQuestions } from "./psychQuestions"; // Подключаем все 111 вопросов
 
 const PsychTestTab = () => {
-  const [folders, setFolders] = useState([
-    { id: "1", name: "Папка 1" },
-    { id: "2", name: "Группа 101-А" },
-  ]);
+  // Инициализируем папки из localStorage для единой синхронизации с Анализатором/Конструктором
+  const [folders, setFolders] = useState(() => {
+    const saved = localStorage.getItem("testBuilderFolders");
+    return saved
+      ? JSON.parse(saved)
+      : [
+          { id: "1", name: "Папка 1" },
+          { id: "2", name: "Группа 101-А" },
+        ];
+  });
+
   const [activeFolderId, setActiveFolderId] = useState("1");
   const [selectedStudent, setSelectedStudent] = useState(null);
 
-  // Моковые данные сдавших студентов
-  const [submissions] = useState([
-    {
-      id: "sub_1",
-      folderId: "1",
-      studentName: "Иванов Иван Иванович",
-      gender: "Мужской",
-      date: "18.08.2026",
-      isInvalid: false,
-      scores: {
-        extroversion: 65,
-        neuroticism: 25,
-        agreeableness: 80,
-        conscientiousness: 75,
-        openness: 88,
-      },
-    },
-    {
-      id: "sub_2",
-      folderId: "1",
-      studentName: "Петров Петр Петрович",
-      gender: "Мужской",
-      date: "17.08.2026",
-      isInvalid: true, // Провалил шкалу лжи
-      scores: {},
-    },
-  ]);
+  // Убрали фейковых студентов. Массив пуст, пока никто не прошел.
+  const [submissions, setSubmissions] = useState([]);
+
+  // Синхронизация папок при изменениях
+  useEffect(() => {
+    localStorage.setItem("testBuilderFolders", JSON.stringify(folders));
+    window.dispatchEvent(new Event("foldersUpdated")); // Уведомляем другие вкладки
+  }, [folders]);
+
+  // Слушаем изменения папок из других модулей (Конструктор/Анализатор)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem("testBuilderFolders");
+      if (saved) setFolders(JSON.parse(saved));
+    };
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("foldersUpdated", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("foldersUpdated", handleStorageChange);
+    };
+  }, []);
 
   const handleCopyLink = () => {
     const link = `${window.location.origin}/psych-test`;
     navigator.clipboard.writeText(link);
-    alert(`Ссылка скопирована в буфер обмена: ${link}`);
+    alert(`Ссылка скопирована: ${link}`);
+  };
+
+  // --- ЛОГИКА ПАПОК ---
+  const handleAddFolder = () => {
+    const folderName = prompt("Введите название новой папки:");
+    if (folderName && folderName.trim()) {
+      const newFolder = { id: Date.now().toString(), name: folderName.trim() };
+      setFolders([...folders, newFolder]);
+      setActiveFolderId(newFolder.id);
+    }
+  };
+
+  const handleDeleteFolder = (e, id) => {
+    e.stopPropagation();
+    if (window.confirm("Уверены, что хотите удалить эту папку?")) {
+      const newFolders = folders.filter((f) => f.id !== id);
+      setFolders(newFolders);
+      if (activeFolderId === id && newFolders.length > 0) {
+        setActiveFolderId(newFolders[0].id);
+      } else if (newFolders.length === 0) {
+        setActiveFolderId(null);
+      }
+    }
   };
 
   const filteredSubmissions = submissions.filter(
@@ -92,7 +77,7 @@ const PsychTestTab = () => {
     <div
       style={{ display: "flex", gap: "20px", width: "100%", height: "100%" }}
     >
-      {/* ЛЕВАЯ КОЛОНКА (Сайдбар: Папки + Студенты) */}
+      {/* ЛЕВАЯ КОЛОНКА */}
       <div
         style={{
           width: "300px",
@@ -122,18 +107,23 @@ const PsychTestTab = () => {
               Папки результатов
             </strong>
             <button
+              onClick={handleAddFolder}
               style={{
                 border: "none",
                 background: "none",
                 cursor: "pointer",
                 color: "#2563eb",
               }}
+              title="Добавить папку"
             >
               <FolderPlus size={18} />
             </button>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {folders.length === 0 && (
+              <p style={{ fontSize: "13px", color: "#94a3b8" }}>Нет папок</p>
+            )}
             {folders.map((f) => (
               <div
                 key={f.id}
@@ -144,7 +134,7 @@ const PsychTestTab = () => {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "8px",
+                  justifyContent: "space-between",
                   padding: "8px 10px",
                   borderRadius: "6px",
                   cursor: "pointer",
@@ -154,14 +144,33 @@ const PsychTestTab = () => {
                   fontWeight: activeFolderId === f.id ? "600" : "400",
                 }}
               >
-                <Folder size={16} />
-                <span>{f.name}</span>
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
+                >
+                  <Folder size={16} />
+                  <span>{f.name}</span>
+                </div>
+                {/* Кнопка удаления папки */}
+                <button
+                  onClick={(e) => handleDeleteFolder(e, f.id)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: activeFolderId === f.id ? "#3b82f6" : "#cbd5e1",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                  title="Удалить папку"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Блок списка студентов */}
+        {/* Блок студентов */}
         <div
           style={{
             background: "#fff",
@@ -183,62 +192,30 @@ const PsychTestTab = () => {
           </strong>
 
           {filteredSubmissions.length === 0 ? (
-            <p style={{ fontSize: "13px", color: "#94a3b8" }}>
-              В этой папке пока нет ответов
+            <p
+              style={{
+                fontSize: "13px",
+                color: "#94a3b8",
+                textAlign: "center",
+                marginTop: "20px",
+              }}
+            >
+              В этой папке пока нет ответов. Отправьте ссылку студентам, чтобы
+              собрать данные.
             </p>
           ) : (
             <div
               style={{ display: "flex", flexDirection: "column", gap: "8px" }}
             >
               {filteredSubmissions.map((sub) => (
-                <div
-                  key={sub.id}
-                  onClick={() => setSelectedStudent(sub)}
-                  style={{
-                    padding: "10px",
-                    borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
-                    cursor: "pointer",
-                    background:
-                      selectedStudent?.id === sub.id ? "#f8fafc" : "#fff",
-                    borderColor:
-                      selectedStudent?.id === sub.id ? "#2563eb" : "#e2e8f0",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontWeight: "600",
-                        fontSize: "14px",
-                        color: sub.isInvalid ? "#dc2626" : "#1e293b",
-                      }}
-                    >
-                      {sub.studentName}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "#64748b",
-                      marginTop: "4px",
-                    }}
-                  >
-                    {sub.date} • {sub.isInvalid ? "⚠️ Ложь" : "Пройден"}
-                  </div>
-                </div>
+                <div key={sub.id}>{/* Рендер студента */}</div>
               ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* ПРАВАЯ КОЛОНКА (Вопросы или Результаты) */}
+      {/* ПРАВАЯ КОЛОНКА */}
       <div
         style={{
           flex: 1,
@@ -247,9 +224,9 @@ const PsychTestTab = () => {
           borderRadius: "8px",
           border: "1px solid #e2e8f0",
           overflowY: "auto",
+          maxHeight: "calc(100vh - 120px)",
         }}
       >
-        {/* Шапка правой колонки */}
         <div
           style={{
             display: "flex",
@@ -269,11 +246,11 @@ const PsychTestTab = () => {
             <span style={{ fontSize: "13px", color: "#64748b" }}>
               {selectedStudent
                 ? `Дата сдачи: ${selectedStudent.date}`
-                : "Всего вопросов: 111"}
+                : `Всего вопросов: ${psychQuestions.length}`}
             </span>
           </div>
 
-          <div style={{ display: "flex", gap: "100px" }}>
+          <div style={{ display: "flex", gap: "10px" }}>
             {selectedStudent && (
               <button
                 onClick={() => setSelectedStudent(null)}
@@ -308,66 +285,20 @@ const PsychTestTab = () => {
           </div>
         </div>
 
-        {/* Контент: Просмотр результатов студента */}
         {selectedStudent ? (
-          <div>
-            {selectedStudent.isInvalid ? (
-              <div
-                style={{
-                  background: "#fef2f2",
-                  color: "#991b1b",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  border: "1px solid #fecaca",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontWeight: "bold",
-                  }}
-                >
-                  <AlertTriangle size={20} /> Результат может быть неточным
-                </div>
-                <p style={{ margin: "8px 0 0 0", fontSize: "14px" }}>
-                  Пользователь набрал высокий балл по Шкале лжи. Похоже, ответы
-                  давались так, чтобы казаться лучше.
-                </p>
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                }}
-              >
-                <div>Экстраверсия: {selectedStudent.scores.extroversion}%</div>
-                <div>Нейротизм: {selectedStudent.scores.neuroticism}%</div>
-                <div>
-                  Доброжелательность: {selectedStudent.scores.agreeableness}%
-                </div>
-                <div>
-                  Добросовестность: {selectedStudent.scores.conscientiousness}%
-                </div>
-                <div>Открытость опыту: {selectedStudent.scores.openness}%</div>
-              </div>
-            )}
-          </div>
+          <div> {/* Блок с результатами (скрыт, пока нет данных) */} </div>
         ) : (
-          /* Контент: Список вопросов теста */
+          /* ПОЛНЫЙ СПИСОК ВОПРОСОВ (111 ШТ) */
           <div
             style={{ display: "flex", flexDirection: "column", gap: "10px" }}
           >
-            {sampleQuestions.map((q) => (
+            {psychQuestions.map((q) => (
               <div
                 key={q.id}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  justifyBetween: "space-between",
+                  justifyContent: "space-between",
                   padding: "10px",
                   background: "#f8fafc",
                   borderRadius: "6px",
@@ -377,13 +308,17 @@ const PsychTestTab = () => {
                 <span
                   style={{
                     fontWeight: "bold",
-                    width: "30px",
+                    width: "35px",
                     color: "#94a3b8",
                   }}
                 >
                   {q.id}.
                 </span>
-                <span style={{ flex: 1, color: "#334155" }}>{q.text}</span>
+                <span
+                  style={{ flex: 1, color: "#334155", paddingRight: "15px" }}
+                >
+                  {q.text}
+                </span>
                 <span
                   style={{
                     fontSize: "12px",
@@ -391,22 +326,13 @@ const PsychTestTab = () => {
                     color: "#0369a1",
                     padding: "2px 8px",
                     borderRadius: "12px",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {q.scale}
                 </span>
               </div>
             ))}
-            <div
-              style={{
-                textAlign: "center",
-                color: "#94a3b8",
-                fontSize: "13px",
-                marginTop: "10px",
-              }}
-            >
-              ... и еще 106 вопросов в базе данных ...
-            </div>
           </div>
         )}
       </div>
