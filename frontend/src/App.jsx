@@ -1,16 +1,25 @@
 import React, { useState } from "react";
 import Constructor from "./components/Constructor";
 import Analyzer from "./components/Analyzer";
-import QuizPlayer from "./components/QuizPlayer"; // Импортируем плеер
-import { LayoutDashboard, FileSpreadsheet, PenTool } from "lucide-react";
+import QuizPlayer from "./components/QuizPlayer";
+import PsychTestTab from "./components/PsychTestTab"; // Вкладка управления псих. тестом
+import PsychQuizPlayer from "./components/PsychQuizPlayer"; // Публичный плеер для студентов
+import { LayoutDashboard, FileSpreadsheet, PenTool, Brain } from "lucide-react";
 import "./App.css";
 
 function App() {
-  // --- ПРОВЕРКА ССЫЛКИ ДЛЯ ШЕРИНГА ---
+  // --- ПРОВЕРКА ССЫЛОК ДЛЯ ШЕРИНГА ---
   const path = window.location.pathname;
+
+  // Ссылка на обычный квиз
   if (path.startsWith("/quiz/")) {
     const quizId = path.split("/quiz/")[1];
     return <QuizPlayer quizId={quizId} />;
+  }
+
+  // Ссылка на прохождение психологического теста
+  if (path.startsWith("/psych-test")) {
+    return <PsychQuizPlayer />;
   }
   // ------------------------------------
 
@@ -43,12 +52,20 @@ function App() {
             >
               <FileSpreadsheet size={18} /> Анализатор
             </button>
+            <button
+              onClick={() => setActiveTab("psych")}
+              className={`tab-btn ${activeTab === "psych" ? "active" : ""}`}
+            >
+              <Brain size={18} /> Псих. тест
+            </button>
           </nav>
         </div>
       </header>
 
       <main className="main-content">
-        {activeTab === "constructor" ? <Constructor /> : <Analyzer />}
+        {activeTab === "constructor" && <Constructor />}
+        {activeTab === "analyzer" && <Analyzer />}
+        {activeTab === "psych" && <PsychTestTab />}
       </main>
     </div>
   );
