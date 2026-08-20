@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
-// Импортируй свои вопросы. Если они приходят с бэка, логику тоже можно вынести в useEffect
+// Подтягиваем вопросы
 import { psychQuestions } from "./psychQuestions";
 
 export default function PsychQuizPlayer() {
@@ -25,14 +24,17 @@ export default function PsychQuizPlayer() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- 1. ЗАГРУЗКА ПАПОК ПСИХ. ТЕСТА ПРИ МОНТИРОВАНИИ ---
+  // --- 1. ЗАГРУЗКА ПАПОК ПСИХ. ТЕСТА (Используем встроенный fetch) ---
   useEffect(() => {
     const fetchPsychFolders = async () => {
       try {
-        // Укажи здесь СВОЙ эндпоинт, который отдает папки именно Псих. теста
-        const response = await axios.get("/api/psych-test/folders");
+        const response = await fetch("/api/psych-test/folders");
 
-        const loadedFolders = response.data;
+        if (!response.ok) {
+          throw new Error("Сетевая ошибка при загрузке папок");
+        }
+
+        const loadedFolders = await response.json();
         setFolders(loadedFolders);
 
         // Если папки есть, автоматически выбираем первую в селекте
@@ -79,7 +81,7 @@ export default function PsychQuizPlayer() {
   const handleAnswerSelect = async (score) => {
     const currentQuestion = psychQuestions[currentQuestionIndex];
 
-    // Сохраняем ответ (можно сохранять как score, так и объект с текстом вопроса)
+    // Сохраняем ответ
     const newAnswers = { ...answers, [currentQuestion.id]: score };
     setAnswers(newAnswers);
 
@@ -92,7 +94,7 @@ export default function PsychQuizPlayer() {
     }
   };
 
-  // Отправка результатов на бэкенд
+  // Отправка результатов на бэкенд (Используем встроенный fetch)
   const submitResults = async (finalAnswers) => {
     setIsSubmitting(true);
     setError("");
@@ -102,12 +104,21 @@ export default function PsychQuizPlayer() {
           fullName: studentInfo.fullName,
           gender: studentInfo.gender,
         },
-        folderId: studentInfo.folderId, // Привязываем к выбранной папке псих. теста
+        folderId: studentInfo.folderId,
         answers: finalAnswers,
       };
 
-      // Укажи здесь СВОЙ эндпоинт для сохранения результатов псих. теста
-      await axios.post("/api/psych-test/results", payload);
+      const response = await fetch("/api/psych-test/results", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error("Ошибка сервера при сохранении");
+      }
 
       setStep(2); // Переходим к экрану "Успешно"
     } catch (err) {
@@ -115,7 +126,6 @@ export default function PsychQuizPlayer() {
       setError(
         "Произошла ошибка при сохранении результатов. Пожалуйста, не закрывайте страницу и позовите преподавателя.",
       );
-      // Оставляем на последнем вопросе, чтобы студент мог попробовать отправить еще раз
     } finally {
       setIsSubmitting(false);
     }
@@ -124,7 +134,6 @@ export default function PsychQuizPlayer() {
   // --- РЕНДЕР ---
   return (
     <div className="max-w-xl mx-auto my-10 p-6 bg-white rounded-xl shadow-md border border-gray-100">
-      {/* Вывод глобальных ошибок (например, при загрузке или отправке) */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-lg text-sm border border-red-200">
           {error}
@@ -193,7 +202,6 @@ export default function PsychQuizPlayer() {
                     </option>
                   ) : (
                     folders.map((folder) => (
-                      // Используем _id, так как в MongoDB уникальные ключи хранятся так
                       <option key={folder._id} value={folder._id}>
                         📁 {folder.name}
                       </option>
@@ -249,7 +257,7 @@ export default function PsychQuizPlayer() {
 
           {/* Варианты ответов */}
           <div className="space-y-3 relative">
-            {/* Оверлей при отправке последнего вопроса, чтобы не кликали дважды */}
+            {/* Оверлей при отправке */}
             {isSubmitting && (
               <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-10 rounded-lg">
                 <span className="font-medium text-blue-600">
