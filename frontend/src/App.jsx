@@ -3,7 +3,7 @@ import Constructor from "./components/Constructor";
 import Analyzer from "./components/Analyzer";
 import QuizPlayer from "./components/QuizPlayer";
 import PsychTestTab from "./components/PsychTestTab"; // Вкладка управления псих. тестом
-import PsychQuizPlayer from "./components/PsychQuizPlayer"; // Публичный плеер для студентов
+import PsychQuizPlayer from "./PsychQuizPlayer"; // Публичный плеер для студентов
 import { LayoutDashboard, FileSpreadsheet, PenTool, Brain } from "lucide-react";
 import "./App.css";
 
