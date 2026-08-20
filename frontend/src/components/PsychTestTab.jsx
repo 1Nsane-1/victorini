@@ -340,4 +340,4 @@ const PsychTestTab = () => {
   );
 };
 
-export default PsychTestTab;
+export default PsychQuizPlayer;
