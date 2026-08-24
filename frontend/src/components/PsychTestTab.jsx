@@ -26,7 +26,7 @@ const PsychTestTab = () => {
 
       try {
         const response = await fetch(
-          `http://localhost:3000/api/psych-submissions?folder=${activeFolderId}`,
+          `/api/psych-submissions?folder=${activeFolderId}`,
         );
         const data = await response.json();
 

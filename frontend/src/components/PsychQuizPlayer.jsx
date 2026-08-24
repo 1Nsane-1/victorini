@@ -92,7 +92,7 @@ export default function PsychQuizPlayer() {
     setError("");
     try {
       // 1. Отправляем данные на наш НОВЫЙ бэкенд
-      await fetch("http://localhost:3000/api/psych-submissions", {
+      await fetch("/api/psych-submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
