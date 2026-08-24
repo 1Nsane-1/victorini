@@ -92,7 +92,7 @@ export default function PsychQuizPlayer() {
     setError("");
     try {
       // 1. Отправляем данные на наш НОВЫЙ бэкенд
-      await fetch("/api/psych-submissions", {
+      await fetch("https://victorini-api.onrender.com/api/psych-submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

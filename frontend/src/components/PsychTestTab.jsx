@@ -26,7 +26,7 @@ const PsychTestTab = () => {
 
       try {
         const response = await fetch(
-          `/api/psych-submissions?folder=${activeFolderId}`,
+          `https://victorini-api.onrender.com/api/psych-submissions?folder=${activeFolderId}`,
         );
         const data = await response.json();
 
