@@ -235,7 +235,57 @@ const PsychTestTab = () => {
               style={{ display: "flex", flexDirection: "column", gap: "8px" }}
             >
               {filteredSubmissions.map((sub) => (
-                <div key={sub.id}>{/* Рендер студента */}</div>
+                <div
+                  key={sub.id}
+                  onClick={() => setSelectedStudent(sub)}
+                  style={{
+                    padding: "12px 16px",
+                    border: "1px solid",
+                    borderColor:
+                      selectedStudent?.id === sub.id ? "#3b82f6" : "#e2e8f0",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    background:
+                      selectedStudent?.id === sub.id ? "#eff6ff" : "#fff",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: "600",
+                        fontSize: "14px",
+                        color: "#1e293b",
+                      }}
+                    >
+                      {sub.studentName}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#64748b",
+                        marginTop: "4px",
+                      }}
+                    >
+                      {sub.date}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      background: "#dcfce7",
+                      color: "#166534",
+                      padding: "4px 10px",
+                      borderRadius: "12px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Сдал
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -313,7 +363,127 @@ const PsychTestTab = () => {
         </div>
 
         {selectedStudent ? (
-          <div> {/* Блок с результатами (скрыт, пока нет данных) */} </div>
+          <div>
+            {/* Статистика по психологическим шкалам */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                gap: "12px",
+                marginBottom: "24px",
+              }}
+            >
+              {Object.entries(
+                psychQuestions.reduce((acc, q) => {
+                  const score = selectedStudent.answers[q.id];
+                  if (score !== undefined) {
+                    acc[q.scale] = (acc[q.scale] || 0) + score;
+                  }
+                  return acc;
+                }, {}),
+              ).map(([scale, score]) => (
+                <div
+                  key={scale}
+                  style={{
+                    padding: "16px",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "12px",
+                    background: "#f8fafc",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      color: "#64748b",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    {scale}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "20px",
+                      fontWeight: "700",
+                      color: "#10b981",
+                    }}
+                  >
+                    {score}{" "}
+                    <span
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        color: "#94a3b8",
+                      }}
+                    >
+                      баллов
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Детализация ответов */}
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+            >
+              {psychQuestions.map((q) => {
+                const score = selectedStudent.answers[q.id];
+                return (
+                  <div
+                    key={q.id}
+                    style={{
+                      padding: "16px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      background: "#fff",
+                      borderLeft: score
+                        ? "6px solid #10b981"
+                        : "6px solid #cbd5e1",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontWeight: "600",
+                        fontSize: "15px",
+                        color: "#1e293b",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      {q.id}. {q.text}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: score ? "#10b981" : "#94a3b8",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {score ? `Выбран ответ: ${score}` : "Ответ не дан"}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          background: "#e0f2fe",
+                          color: "#0369a1",
+                          padding: "4px 8px",
+                          borderRadius: "12px",
+                        }}
+                      >
+                        {q.scale}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         ) : (
           /* ПОЛНЫЙ СПИСОК ВОПРОСОВ (111 ШТ) */
           <div
