@@ -8,6 +8,7 @@ const PDFDocument = require("pdfkit");
 const { Document, Packer, Paragraph, TextRun } = require("docx");
 require("dotenv").config();
 const mongoose = require("mongoose");
+const PsychSubmission = require("./models/PsychSubmission");
 const Survey = require("./models/Survey");
 const Submission = require("./models/Submission");
 mongoose
@@ -359,6 +360,46 @@ app.post("/api/submissions", async (req, res) => {
   } catch (error) {
     console.error("Ошибка сохранения результата:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+// --- ЭНДПОИНТЫ ТОЛЬКО ДЛЯ ВКЛАДКИ ПСИХ. ТЕСТ ---
+
+// 1. Сохранение ответа студента в выбранную папку
+app.post("/api/psych-submissions", async (req, res) => {
+  try {
+    const { studentName, folder, answers, testTitle } = req.body;
+
+    const newResult = new PsychSubmission({
+      studentName: studentName || "Аноним",
+      folder: folder || "1",
+      answers: answers || [],
+      testTitle: testTitle || "Психологический тест",
+    });
+
+    await newResult.save();
+    res
+      .status(201)
+      .json({ message: "Ответ успешно сохранен в БД!", result: newResult });
+  } catch (error) {
+    console.error("Ошибка сохранения псих. теста:", error);
+    res.status(500).json({ error: "Не удалось сохранить результат" });
+  }
+});
+
+// 2. Получение списка ответов для конкретной папки
+app.get("/api/psych-submissions", async (req, res) => {
+  try {
+    const { folder } = req.query;
+    const filter = folder ? { folder } : {};
+
+    // Ищем только в коллекции псих. тестов
+    const results = await PsychSubmission.find(filter).sort({
+      submittedAt: -1,
+    });
+    res.status(200).json(results);
+  } catch (error) {
+    console.error("Ошибка загрузки результатов псих. теста:", error);
+    res.status(500).json({ error: "Не удалось получить результаты" });
   }
 });
 app.listen(PORT, () => {

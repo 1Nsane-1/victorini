@@ -91,6 +91,18 @@ export default function PsychQuizPlayer() {
     setIsSubmitting(true);
     setError("");
     try {
+      // 1. Отправляем данные на наш НОВЫЙ бэкенд
+      await fetch("http://localhost:3000/api/psych-submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentName: studentInfo.fullName,
+          folder: studentInfo.folderId, // Передаем ID выбранной папки
+          answers: finalAnswers,
+        }),
+      });
+
+      // 2. Оставляем твое локальное сохранение (чтобы не ломать старую логику, если она тебе нужна)
       const newSubmission = {
         id: Date.now().toString(),
         studentName: studentInfo.fullName,
@@ -99,25 +111,12 @@ export default function PsychQuizPlayer() {
         date: new Date().toLocaleDateString("ru-RU"),
         answers: finalAnswers,
       };
-
-      // Сохраняем результат локально для синхронизации с табуляцией
       const existing = JSON.parse(
         localStorage.getItem("psychSubmissions") || "[]",
       );
       existing.push(newSubmission);
       localStorage.setItem("psychSubmissions", JSON.stringify(existing));
       window.dispatchEvent(new Event("psychSubmissionsUpdated"));
-
-      // Попытка отправить на backend, если сервер подключен
-      try {
-        await fetch("/api/psych-test/results", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newSubmission),
-        });
-      } catch (e) {
-        // Локальное сохранение сработало в любом случае
-      }
 
       setStep(2);
     } catch (err) {

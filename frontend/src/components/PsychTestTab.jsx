@@ -19,7 +19,34 @@ const PsychTestTab = () => {
 
   // Убрали фейковых студентов. Массив пуст, пока никто не прошел.
   const [submissions, setSubmissions] = useState([]);
+  // --- ЗАГРУЗКА ОТВЕТОВ ИЗ БАЗЫ ДАННЫХ ---
+  useEffect(() => {
+    const fetchSubmissions = async () => {
+      if (!activeFolderId) return;
 
+      try {
+        const response = await fetch(
+          `http://localhost:3000/api/psych-submissions?folder=${activeFolderId}`,
+        );
+        const data = await response.json();
+
+        // Преобразуем данные из БД под формат, который ожидает твой фронтенд
+        const formattedData = data.map((item) => ({
+          id: item._id,
+          studentName: item.studentName,
+          folderId: item.folder,
+          date: new Date(item.submittedAt).toLocaleDateString("ru-RU"),
+          answers: item.answers,
+        }));
+
+        setSubmissions(formattedData);
+      } catch (error) {
+        console.error("Ошибка загрузки ответов:", error);
+      }
+    };
+
+    fetchSubmissions();
+  }, [activeFolderId]); // Вызывается каждый раз, когда меняется активная папка
   // Синхронизация папок при изменениях
   useEffect(() => {
     localStorage.setItem("testBuilderFolders", JSON.stringify(folders));
