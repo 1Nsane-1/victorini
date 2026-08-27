@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from "react";
-// Если используешь React Router для перехода к тесту:
-// import { useNavigate } from "react-router-dom";
 
-const API_URL = "http://localhost:3000";
+// Укажи здесь адрес твоего бэкенда на Render или переменную окружения
+const API_URL =
+  import.meta.env.VITE_API_URL || "https://victorini-api.onrender.com";
 
 export default function ActiveSurveys() {
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(true);
-  // const navigate = useNavigate();
 
   useEffect(() => {
     fetch(`${API_URL}/api/surveys`)
       .then((res) => res.json())
       .then((data) => {
-        setSurveys(data);
+        if (Array.isArray(data)) {
+          setSurveys(data);
+        }
         setLoading(false);
       })
       .catch((err) => {
@@ -23,13 +24,11 @@ export default function ActiveSurveys() {
   }, []);
 
   const handleStartTest = (surveyId) => {
-    // Здесь должна быть логика перехода к прохождению теста.
-    // Например, если тест открывается по ссылке /quiz/:id :
-    // navigate(`/quiz/${surveyId}`);
-    console.log("Открываем тест с ID:", surveyId);
+    // Переход к плееру теста по роуту /quiz/:id
+    window.location.href = `/quiz/${surveyId}`;
   };
 
-  if (loading) return <div>Загрузка тестов...</div>;
+  if (loading) return <div style={{ padding: "20px" }}>Загрузка тестов...</div>;
 
   return (
     <div style={{ padding: "20px" }}>
@@ -55,6 +54,7 @@ export default function ActiveSurveys() {
                 padding: "16px",
                 width: "300px",
                 boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
+                backgroundColor: "#fff",
               }}
             >
               <h3 style={{ marginTop: 0 }}>
