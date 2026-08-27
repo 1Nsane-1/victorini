@@ -213,6 +213,19 @@ if (fs.existsSync(frontendBuildPath)) {
     res.send("Victorini API Server is live and running!");
   });
 }
+// Маршрут: Удаление теста по ID
+app.delete("/api/surveys/:id", async (req, res) => {
+  try {
+    const deletedSurvey = await Survey.findByIdAndDelete(req.params.id);
+    if (!deletedSurvey) {
+      return res.status(404).json({ error: "Тест не найден" });
+    }
+    res.status(200).json({ message: "Тест успешно удален" });
+  } catch (error) {
+    console.error("Ошибка при удалении теста:", error);
+    res.status(500).json({ error: "Ошибка сервера при удалении" });
+  }
+});
 // Получение списка всех тестов/опросов для вкладки активности
 app.get("/api/surveys", async (req, res) => {
   try {
