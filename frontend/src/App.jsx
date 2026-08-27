@@ -4,7 +4,14 @@ import Analyzer from "./components/Analyzer";
 import QuizPlayer from "./components/QuizPlayer";
 import PsychTestTab from "./components/PsychTestTab"; // Вкладка управления псих. тестом
 import PsychQuizPlayer from "./components/PsychQuizPlayer"; // Публичный плеер для студентов
-import { LayoutDashboard, FileSpreadsheet, PenTool, Brain } from "lucide-react";
+import ActiveSurveys from "./components/ActiveSurveys"; // Новая вкладка активных тестов
+import {
+  LayoutDashboard,
+  FileSpreadsheet,
+  PenTool,
+  Brain,
+  ClipboardList,
+} from "lucide-react";
 import "./App.css";
 
 function App() {
@@ -58,6 +65,14 @@ function App() {
             >
               <Brain size={18} /> Псих. тест
             </button>
+
+            {/* --- НОВАЯ ВКЛАДКА --- */}
+            <button
+              onClick={() => setActiveTab("surveys")}
+              className={`tab-btn ${activeTab === "surveys" ? "active" : ""}`}
+            >
+              <ClipboardList size={18} /> Активные тесты
+            </button>
           </nav>
         </div>
       </header>
@@ -66,6 +81,9 @@ function App() {
         {activeTab === "constructor" && <Constructor />}
         {activeTab === "analyzer" && <Analyzer />}
         {activeTab === "psych" && <PsychTestTab />}
+
+        {/* --- ВЫВОД НОВОЙ ВКЛАДКИ --- */}
+        {activeTab === "surveys" && <ActiveSurveys />}
       </main>
     </div>
   );

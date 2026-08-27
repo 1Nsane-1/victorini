@@ -213,7 +213,16 @@ if (fs.existsSync(frontendBuildPath)) {
     res.send("Victorini API Server is live and running!");
   });
 }
-
+// Получение списка всех тестов/опросов для вкладки активности
+app.get("/api/surveys", async (req, res) => {
+  try {
+    // Сортируем так, чтобы новые были сверху
+    const surveys = await Survey.find().sort({ _id: -1 });
+    res.status(200).json(surveys);
+  } catch (error) {
+    res.status(500).json({ error: "Ошибка при загрузке списка тестов" });
+  }
+});
 // Маршрут 1: Сохранение нового глобального опроса в БД
 app.post("/api/surveys", async (req, res) => {
   try {
