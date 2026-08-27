@@ -267,11 +267,22 @@ export default function Analyzer() {
     if (!filteredResults.length) return;
     setNotice(`Подготовка ${format.toUpperCase()}...`);
 
+    // Сводка со статистикой
+    const stats = {
+      total: totalStudents,
+      passed: passedStudents,
+      failed: totalStudents - passedStudents,
+      passRate: `${passRate}%`,
+      avgScore: avgScore.toFixed(1),
+      medianScore: median,
+      bestStudent: best ? `${best.fio} (${best.score})` : "—",
+    };
+
     try {
       const res = await fetch(`${API_URL}/api/export/${format}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: filteredResults }),
+        body: JSON.stringify({ data: filteredResults, stats }),
       });
 
       if (!res.ok) throw new Error("Export failed");

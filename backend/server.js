@@ -11,6 +11,7 @@ const mongoose = require("mongoose");
 const PsychSubmission = require("./models/PsychSubmission");
 const Survey = require("./models/Survey");
 const Submission = require("./models/Submission");
+
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ База данных MongoDB успешно подключена!"))
@@ -46,24 +47,45 @@ app.post("/api/upload", upload.array("files"), (req, res) => {
 // 2. Настройка экспорта (Excel, PDF, DOCX)
 
 app.post("/api/export/excel", async (req, res) => {
-  const { data } = req.body;
+  const { data, stats } = req.body;
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Результаты");
 
-  worksheet.columns = [
-    { header: "ФИО", key: "fio", width: 35 },
-    { header: "Балл", key: "score", width: 10 },
-    { header: "Макс. Балл", key: "maxScore", width: 15 },
-    { header: "Статус", key: "passed", width: 15 },
-  ];
+  // Блок сводной статистики
+  if (stats) {
+    worksheet.addRow(["ОБЩАЯ СТАТИСТИКА"]);
+    worksheet.addRow([
+      "Всего",
+      "Сдали",
+      "Провалили",
+      "% Сдачи",
+      "Ср. балл",
+      "Медиана",
+      "Лучший результат",
+    ]);
+    worksheet.addRow([
+      stats.total || 0,
+      stats.passed || 0,
+      stats.failed || 0,
+      stats.passRate || "0%",
+      stats.avgScore || 0,
+      stats.medianScore || 0,
+      stats.bestStudent || "—",
+    ]);
+    worksheet.addRow([]); // Пустая строка-разделитель
+  }
 
+  // Заголовки таблицы
+  worksheet.addRow(["ФИО", "Балл", "Макс. Балл", "Статус"]);
+
+  // Данные
   data.forEach((item) => {
-    worksheet.addRow({
-      fio: item.fio,
-      score: item.score,
-      maxScore: item.maxScore,
-      passed: item.passed ? "Сдал" : "Не сдал",
-    });
+    worksheet.addRow([
+      item.fio,
+      item.score,
+      item.maxScore,
+      item.passed ? "Сдал" : "Не сдал",
+    ]);
   });
 
   res.setHeader(
@@ -75,42 +97,53 @@ app.post("/api/export/excel", async (req, res) => {
   res.end();
 });
 
-// Найти и заменить существующий эндпоинт /api/export/pdf:
 app.post("/api/export/pdf", (req, res) => {
-  const { data } = req.body;
-  const doc = new PDFDocument();
+  const { data, stats } = req.body;
+  const doc = new PDFDocument({ margin: 30 });
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", 'attachment; filename="results.pdf"');
   doc.pipe(res);
 
-  // Подключаем шрифт Roboto из папки fonts для поддержки русского языка
   const fontPath = path.join(__dirname, "fonts", "Roboto-Regular.ttf");
   if (fs.existsSync(fontPath)) {
     doc.font(fontPath);
   } else {
-    console.warn(
-      "⚠️ Файл Roboto-Regular.ttf не найден в папке fonts! Кириллица может отображаться некорректно.",
-    );
+    console.warn("⚠️ Файл Roboto-Regular.ttf не найден в папке fonts!");
   }
 
-  doc.fontSize(20).text("Результаты тестирования", { align: "center" });
+  doc.fontSize(18).text("Результаты тестирования", { align: "center" });
   doc.moveDown();
 
+  // Вывод статистики
+  if (stats) {
+    doc.fontSize(12).text(`Всего участников: ${stats.total || 0}`);
+    doc.text(
+      `Успешно: ${stats.passed || 0} | Не сдали: ${stats.failed || 0} (${stats.passRate || "0%"})`,
+    );
+    doc.text(
+      `Средний балл: ${stats.avgScore || 0} | Медиана: ${stats.medianScore || 0}`,
+    );
+    doc.text(`Лучший результат: ${stats.bestStudent || "—"}`);
+    doc.moveDown();
+    doc.text("--------------------------------------------------").moveDown();
+  }
+
+  // Список результатов
   data.forEach((item, index) => {
     doc
-      .fontSize(12)
+      .fontSize(11)
       .text(
         `${index + 1}. ${item.fio} — ${item.score}/${item.maxScore} (${item.passed ? "Сдал" : "Не сдал"})`,
       );
-    doc.moveDown(0.5);
+    doc.moveDown(0.3);
   });
 
   doc.end();
 });
 
 app.post("/api/export/docx", async (req, res) => {
-  const { data } = req.body;
+  const { data, stats } = req.body;
 
   const children = [
     new Paragraph({
@@ -119,6 +152,29 @@ app.post("/api/export/docx", async (req, res) => {
       ],
     }),
   ];
+
+  // Добавление статистики в DOCX
+  if (stats) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `Всего: ${stats.total} | Сдали: ${stats.passed} | Не сдали: ${stats.failed} (${stats.passRate})`,
+            size: 22,
+          }),
+        ],
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `Средний балл: ${stats.avgScore} | Медиана: ${stats.medianScore} | Лучший: ${stats.bestStudent}`,
+            size: 22,
+          }),
+        ],
+      }),
+      new Paragraph({ text: "" }), // Пустая строка
+    );
+  }
 
   data.forEach((item, index) => {
     children.push(
@@ -147,7 +203,6 @@ app.post("/api/export/docx", async (req, res) => {
 // 3. Раздача статики и маршрутизация
 const frontendBuildPath = path.join(__dirname, "../frontend/dist");
 
-// Если сборка фронтенда есть (например, локально), отдаем её. Если нет (на Render) — отдаем простой статус.
 if (fs.existsSync(frontendBuildPath)) {
   app.use(express.static(frontendBuildPath));
   app.get(/^(?!\/api).*/, (req, res) => {
@@ -158,27 +213,13 @@ if (fs.existsSync(frontendBuildPath)) {
     res.send("Victorini API Server is live and running!");
   });
 }
-app.use(express.static(frontendBuildPath));
 
-app.get(/^(?!\/api).*/, (req, res) => {
-  res.sendFile(path.join(frontendBuildPath, "index.html"));
-});
 // Маршрут 1: Сохранение нового глобального опроса в БД
 app.post("/api/surveys", async (req, res) => {
   try {
     const { title, description, blocks } = req.body;
-
-    // Создаем новый документ на основе нашей схемы
-    const newSurvey = new Survey({
-      title,
-      description,
-      blocks,
-    });
-
-    // Сохраняем документ в MongoDB
+    const newSurvey = new Survey({ title, description, blocks });
     const savedSurvey = await newSurvey.save();
-
-    // Отвечаем фронтенду успехом и отдаем данные (включая сгенерированный базой ID)
     res.status(201).json(savedSurvey);
   } catch (error) {
     console.error("Ошибка сохранения опроса:", error);
@@ -198,25 +239,11 @@ app.get("/api/surveys/:id", async (req, res) => {
     res.status(500).json({ error: "Ошибка при поиске опроса" });
   }
 });
-// Маршрут 3: Сохранение результатов прохождения теста учеником
-app.post("/api/submissions", async (req, res) => {
-  try {
-    const submission = new Submission(req.body);
-    await submission.save();
-    res
-      .status(201)
-      .json({ message: "Результат успешно сохранен", id: submission._id });
-  } catch (error) {
-    console.error("Ошибка сохранения результата:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
-// Маршрут 4: Получение результатов по папкам (для твоего Анализатора)
+// Маршрут 4: Получение результатов по папкам
 app.get("/api/submissions", async (req, res) => {
   try {
     const { folder } = req.query;
-    // Если папка передана, фильтруем по ней. Если нет - отдаем все.
     const filter = folder ? { folder } : {};
     const submissions = await Submission.find(filter).sort({ submittedAt: -1 });
     res.status(200).json(submissions);
@@ -225,6 +252,7 @@ app.get("/api/submissions", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // --- 1. ЭНДПОИНТ: Получение списка всех реальных папок с сайта ---
 app.get("/api/folders", (req, res) => {
   const uploadsDir = path.join(__dirname, "uploads");
@@ -232,13 +260,12 @@ app.get("/api/folders", (req, res) => {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  // Читаем все подпапки из директории uploads
   const folders = fs
     .readdirSync(uploadsDir, { withFileTypes: true })
     .filter((dirent) => dirent.isDirectory())
     .map((dirent) => dirent.name);
 
-  // Если папок нет вообще, создаем дефолтную папку "1"
+  // Создаем папку 1, если других нет, чтобы конструктор и анализатор работали синхронно
   if (folders.length === 0) {
     fs.mkdirSync(path.join(uploadsDir, "1"), { recursive: true });
     return res.json(["1"]);
@@ -271,17 +298,16 @@ app.post("/api/folders", (req, res) => {
 
   res.json({ message: "Папка успешно создана", folderName });
 });
+
 // --- 3. ЭНДПОИНТ: Удаление папки на сайте ---
 app.delete("/api/folders/:name", async (req, res) => {
   const folderName = req.params.name;
   const targetPath = path.join(__dirname, "uploads", folderName);
 
-  // Удаляем физическую папку
   if (fs.existsSync(targetPath)) {
     fs.rmSync(targetPath, { recursive: true, force: true });
   }
 
-  // Удаляем результаты из базы данных, привязанные к этой папке
   try {
     await Submission.deleteMany({ folder: folderName });
     res.json({ message: "Папка и все её результаты удалены" });
@@ -300,14 +326,12 @@ app.put("/api/folders/:oldName", async (req, res) => {
   const oldPath = path.join(uploadsDir, oldName);
   const newPath = path.join(uploadsDir, newName);
 
-  // Переименовываем физическую папку
   if (fs.existsSync(oldPath)) {
     fs.renameSync(oldPath, newPath);
   } else {
-    fs.mkdirSync(newPath, { recursive: true }); // Если не было, создадим новую
+    fs.mkdirSync(newPath, { recursive: true });
   }
 
-  // Обновляем имя папки во всех результатах в базе данных
   try {
     await Submission.updateMany(
       { folder: oldName },
@@ -318,6 +342,7 @@ app.put("/api/folders/:oldName", async (req, res) => {
     res.status(500).json({ error: "Ошибка при обновлении БД" });
   }
 });
+
 // --- 3. ЭНДПОИНТ: Сохранение ответов ученика (в MongoDB + в .json файл папки) ---
 app.post("/api/submissions", async (req, res) => {
   try {
@@ -338,7 +363,6 @@ app.post("/api/submissions", async (req, res) => {
     const safeName = studentName.replace(/[^a-zA-Z0-9а-яА-ЯёЁ]/g, "_");
     const fileName = `result_${safeName}_${Date.now()}.json`;
 
-    // Формат файла, который ждет ваш Анализатор
     const jsonResult = {
       fio: studentName,
       quizTitle: quizTitle,
@@ -362,9 +386,9 @@ app.post("/api/submissions", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // --- ЭНДПОИНТЫ ТОЛЬКО ДЛЯ ВКЛАДКИ ПСИХ. ТЕСТ ---
 
-// 1. Сохранение ответа студента в выбранную папку
 app.post("/api/psych-submissions", async (req, res) => {
   try {
     const { studentName, folder, answers, testTitle } = req.body;
@@ -386,13 +410,11 @@ app.post("/api/psych-submissions", async (req, res) => {
   }
 });
 
-// 2. Получение списка ответов для конкретной папки
 app.get("/api/psych-submissions", async (req, res) => {
   try {
     const { folder } = req.query;
     const filter = folder ? { folder } : {};
 
-    // Ищем только в коллекции псих. тестов
     const results = await PsychSubmission.find(filter).sort({
       submittedAt: -1,
     });
@@ -402,6 +424,7 @@ app.get("/api/psych-submissions", async (req, res) => {
     res.status(500).json({ error: "Не удалось получить результаты" });
   }
 });
+
 app.listen(PORT, () => {
   console.log(`\n=========================================`);
   console.log(`API Сервер запущен: http://localhost:${PORT}`);
